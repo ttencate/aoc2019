@@ -3,6 +3,7 @@ use std::env;
 use std::fmt::Display;
 
 mod input;
+pub mod intcode;
 
 pub fn main<P1, P2, R1, R2>(part1: P1, part2: P2)
     where P1: Fn(&str) -> R1, P2: Fn(&str) -> R2, R1: Display, R2: Display

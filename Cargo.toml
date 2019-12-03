@@ -5,9 +5,6 @@ authors = ["Thomas ten Cate <ttencate@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-fixedbitset = "0.1.9"
-itertools = "0.8.0"
-lazy_static = "1.2.0"
+euclid = "0.20.5"
 regex = "1"
 reqwest = "0.9.5"
-rust-crypto = "^0.2"

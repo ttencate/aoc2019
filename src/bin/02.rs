@@ -1,6 +1,6 @@
 use aoc::intcode::Program;
 
-fn part1(input: &str) -> usize {
+fn part1(input: &str) -> i64 {
     let mut program = Program::parse(input);
     program.mem[1] = 12;
     program.mem[2] = 2;
@@ -8,7 +8,7 @@ fn part1(input: &str) -> usize {
     program.mem[0]
 }
 
-fn part2(input: &str) -> usize {
+fn part2(input: &str) -> i64 {
     let program = Program::parse(input);
     let mut max = 1;
     loop {

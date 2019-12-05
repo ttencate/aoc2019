@@ -1,85 +1,86 @@
+type Number = i64;
+
+type Addr = usize;
+
+pub fn to_addr(n: Number) -> Addr {
+    n as Addr
+}
+
+type Memory = Vec<Number>;
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub enum Arg {
+    Position(Addr),
+    Immediate(Number),
+}
+
+impl Arg {
+    pub fn eval(&self, mem: &Memory) -> Number {
+        match *self {
+            Arg::Position(addr) => mem[addr],
+            Arg::Immediate(num) => num,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Program {
-    pub mem: Vec<usize>,
+    pub mem: Memory,
     pub ip: usize,
 }
 
 impl Program {
     pub fn parse(input: &str) -> Self {
         Program {
-            mem: input.trim().split(",").map(|s| s.parse::<usize>().unwrap()).collect(),
+            mem: input.trim().split(",").map(|s| s.parse::<Number>().unwrap()).collect(),
             ip: 0,
         }
     }
 
     pub fn run(mut self) -> Self {
-        loop {
-            let (instr, next_ip) = Instr::parse(&self.mem, self.ip);
-            if !instr.exec(&mut self.mem) {
-                break;
-            }
-            self.ip = next_ip;
-        }
+        while self.run_instr() {}
         self
     }
-}
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Instr {
-    Add(usize, usize, usize),
-    Mul(usize, usize, usize),
-    Halt(),
-}
-
-impl Instr {
-    pub fn parse(mem: &Vec<usize>, ip: usize) -> (Instr, usize) {
-        let opcode = mem[ip];
+    fn run_instr(&mut self) -> bool {
+        let mut op = self.mem[self.ip];
+        self.ip += 1;
+        let opcode = op % 100;
+        op /= 100;
         match opcode {
-            1 => (Instr::Add(mem[ip + 1], mem[ip + 2], mem[ip + 3]), ip + 4),
-            2 => (Instr::Mul(mem[ip + 1], mem[ip + 2], mem[ip + 3]), ip + 4),
-            99 => (Instr::Halt(), ip + 1),
-            _ => { panic!("Invalid opcode {} at address {}", opcode, ip); }
-        }
-    }
-
-    pub fn exec(&self, mem: &mut Vec<usize>) -> bool {
-        match *self {
-            Instr::Add(a_addr, b_addr, dest_addr) => {
-                mem[dest_addr] = mem[a_addr] + mem[b_addr];
-            },
-            Instr::Mul(a_addr, b_addr, dest_addr) => {
-                mem[dest_addr] = mem[a_addr] * mem[b_addr];
-            },
-            Instr::Halt() => {
-                return false;
-            }
+            1 => { self.bin_op(op, |a, b| a + b); },
+            2 => { self.bin_op(op, |a, b| a * b); },
+            99 => { return false; }
+            _ => { panic!("Invalid opcode {} at address {}", opcode, self.ip - 1); }
         }
         true
     }
-}
 
-impl std::fmt::Display for Instr {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Instr::Add(a_addr, b_addr, dest_addr) =>
-                write!(f, "ADD {:3} {:3} {:3}", a_addr, b_addr, dest_addr),
-            Instr::Mul(a_addr, b_addr, dest_addr) =>
-                write!(f, "MUL {:3} {:3} {:3}", a_addr, b_addr, dest_addr),
-            Instr::Halt() =>
-                write!(f, "HALT"),
+    fn eval_arg(&mut self, op: &mut Number) -> Number {
+        let mode = *op % 10;
+        *op /= 10;
+        let val = self.mem[self.ip];
+        self.ip += 1;
+        match mode {
+            0 => self.mem[to_addr(val)],
+            1 => val,
+            _ => panic!("Invalid parameter mode {} at address {}", mode, self.ip - 1),
         }
     }
-}
 
-impl std::fmt::Display for Program {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let mut ip = 0;
-        while ip < self.mem.len() {
-            let (instr, next_ip) = Instr::parse(&self.mem, ip);
-            write!(f, "{:2}:  {}\n", ip, instr)?;
-            ip = next_ip;
-        }
-        Ok(())
+    fn eval_addr(&mut self) -> Addr {
+        let val = self.mem[self.ip];
+        self.ip += 1;
+        to_addr(val)
+    }
+
+    fn bin_op<F>(&mut self, mut op: Number, f: F)
+        where F: FnOnce(Number, Number) -> Number
+    {
+        let a = self.eval_arg(&mut op);
+        let b = self.eval_arg(&mut op);
+        let dest = self.eval_addr();
+        self.mem[dest] = f(a, b);
     }
 }
 
@@ -100,4 +101,18 @@ fn test_add_mul() {
     assert_eq!(
         Program::parse("1,1,1,4,99,5,6,0,99").run().mem,
         Program::parse("30,1,1,4,2,5,6,0,99").mem);
+}
+
+#[test]
+fn test_immediate_mode() {
+    assert_eq!(
+        Program::parse("1002,4,3,4,33").run().mem,
+        Program::parse("1002,4,3,4,99").mem);
+}
+
+#[test]
+fn test_negative() {
+    assert_eq!(
+        Program::parse("1101,100,-1,4,0").run().mem,
+        Program::parse("1101,100,-1,4,99").mem);
 }

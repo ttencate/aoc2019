@@ -6,8 +6,10 @@ fn part1(input: &str) -> Number {
         .output.last().unwrap()
 }
 
-fn part2(_input: &str) -> String {
-    "TODO".to_string()
+fn part2(input: &str) -> Number {
+    *Program::new(parse_mem(input))
+        .with_input(vec![5]).run()
+        .output.last().unwrap()
 }
 
 fn main() {
@@ -16,5 +18,5 @@ fn main() {
 
 #[test]
 fn test_answers() {
-    aoc::test(part1, 13978427, part2, "TODO".to_string());
+    aoc::test(part1, 13978427, part2, 11189491);
 }

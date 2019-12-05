@@ -8,6 +8,10 @@ pub fn to_addr(n: Number) -> Addr {
 
 type Memory = Vec<Number>;
 
+pub fn parse_mem(input: &str) -> Memory {
+    input.trim().split(",").map(|s| s.parse::<Number>().unwrap()).collect()
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Arg {
     Position(Addr),
@@ -30,9 +34,9 @@ pub struct Program {
 }
 
 impl Program {
-    pub fn parse(input: &str) -> Self {
+    pub fn new(mem: Memory) -> Self {
         Program {
-            mem: input.trim().split(",").map(|s| s.parse::<Number>().unwrap()).collect(),
+            mem: mem,
             ip: 0,
         }
     }
@@ -87,32 +91,32 @@ impl Program {
 #[test]
 fn test_add_mul() {
     assert_eq!(
-        Program::parse("1,9,10,3,2,3,11,0,99,30,40,50").run().mem,
-        Program::parse("3500,9,10,70,2,3,11,0,99,30,40,50").mem);
+        Program::new(parse_mem("1,9,10,3,2,3,11,0,99,30,40,50")).run().mem,
+        parse_mem("3500,9,10,70,2,3,11,0,99,30,40,50"));
     assert_eq!(
-        Program::parse("1,0,0,0,99").run().mem,
-        Program::parse("2,0,0,0,99").mem);
+        Program::new(parse_mem("1,0,0,0,99")).run().mem,
+        parse_mem("2,0,0,0,99"));
     assert_eq!(
-        Program::parse("2,3,0,3,99").run().mem,
-        Program::parse("2,3,0,6,99").mem);
+        Program::new(parse_mem("2,3,0,3,99")).run().mem,
+        parse_mem("2,3,0,6,99"));
     assert_eq!(
-        Program::parse("2,4,4,5,99,0").run().mem,
-        Program::parse("2,4,4,5,99,9801").mem);
+        Program::new(parse_mem("2,4,4,5,99,0")).run().mem,
+        parse_mem("2,4,4,5,99,9801"));
     assert_eq!(
-        Program::parse("1,1,1,4,99,5,6,0,99").run().mem,
-        Program::parse("30,1,1,4,2,5,6,0,99").mem);
+        Program::new(parse_mem("1,1,1,4,99,5,6,0,99")).run().mem,
+        parse_mem("30,1,1,4,2,5,6,0,99"));
 }
 
 #[test]
 fn test_immediate_mode() {
     assert_eq!(
-        Program::parse("1002,4,3,4,33").run().mem,
-        Program::parse("1002,4,3,4,99").mem);
+        Program::new(parse_mem("1002,4,3,4,33")).run().mem,
+        parse_mem("1002,4,3,4,99"));
 }
 
 #[test]
 fn test_negative() {
     assert_eq!(
-        Program::parse("1101,100,-1,4,0").run().mem,
-        Program::parse("1101,100,-1,4,99").mem);
+        Program::new(parse_mem("1101,100,-1,4,0")).run().mem,
+        parse_mem("1101,100,-1,4,99"));
 }

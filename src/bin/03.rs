@@ -72,3 +72,8 @@ fn test_part2() {
 fn main() {
     aoc::main(part1, part2);
 }
+
+#[test]
+fn test_answers() {
+    aoc::test(part1, 3229, part2, 32132);
+}

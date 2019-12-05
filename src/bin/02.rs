@@ -1,7 +1,7 @@
-use aoc::intcode::Program;
+use aoc::intcode::*;
 
 fn part1(input: &str) -> i64 {
-    let mut program = Program::parse(input);
+    let mut program = Program::new(parse_mem(input));
     program.mem[1] = 12;
     program.mem[2] = 2;
     program = program.run();
@@ -9,7 +9,7 @@ fn part1(input: &str) -> i64 {
 }
 
 fn part2(input: &str) -> i64 {
-    let program = Program::parse(input);
+    let program = Program::new(parse_mem(input));
     let mut max = 1;
     loop {
         for noun in 0..max {
@@ -29,4 +29,9 @@ fn part2(input: &str) -> i64 {
 
 fn main() {
     aoc::main(part1, part2);
+}
+
+#[test]
+fn test_answers() {
+    aoc::test(part1, 4570637, part2, 5485);
 }

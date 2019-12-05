@@ -45,3 +45,8 @@ fn part2(input: &str) -> u64 {
 fn main() {
     aoc::main(part1, part2);
 }
+
+#[test]
+fn test_answers() {
+    aoc::test(part1, 3464458, part2, 5193796);
+}

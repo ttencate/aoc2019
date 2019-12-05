@@ -17,21 +17,6 @@ pub fn parse_mem(input: &str) -> Memory {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Arg {
-    Position(Addr),
-    Immediate(Number),
-}
-
-impl Arg {
-    pub fn eval(&self, mem: &Memory) -> Number {
-        match *self {
-            Arg::Position(addr) => mem[addr],
-            Arg::Immediate(num) => num,
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Program {
     pub mem: Memory,
     pub ip: usize,

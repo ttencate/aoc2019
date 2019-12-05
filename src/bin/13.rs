@@ -12,5 +12,5 @@ fn main() {
 
 #[test]
 fn test_answers() {
-    aoc::test(part1, "TODO".to_string(), part2, "TODO".to_string());
+    // aoc::test(part1, "TODO".to_string(), part2, "TODO".to_string());
 }

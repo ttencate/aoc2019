@@ -1,5 +1,9 @@
-fn part1(_input: &str) -> String {
-    "TODO".to_string()
+use aoc::intcode::*;
+
+fn part1(input: &str) -> Number {
+    *Program::new(parse_mem(input))
+        .with_input(vec![1]).run()
+        .output.last().unwrap()
 }
 
 fn part2(_input: &str) -> String {
@@ -12,5 +16,5 @@ fn main() {
 
 #[test]
 fn test_answers() {
-    aoc::test(part1, "TODO".to_string(), part2, "TODO".to_string());
+    aoc::test(part1, 13978427, part2, "TODO".to_string());
 }

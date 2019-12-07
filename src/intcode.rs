@@ -10,7 +10,7 @@ pub fn to_addr(n: Number) -> Addr {
 
 pub type Memory = Vec<Number>;
 pub type Input = VecDeque<Number>;
-pub type Output = Vec<Number>;
+pub type Output = VecDeque<Number>;
 
 pub fn parse_mem(input: &str) -> Memory {
     input.trim().split(",").map(|s| s.parse::<Number>().unwrap()).collect()
@@ -30,7 +30,7 @@ impl Program {
             mem: mem,
             ip: 0,
             input: VecDeque::new(),
-            output: vec![],
+            output: VecDeque::new(),
         }
     }
 
@@ -42,6 +42,17 @@ impl Program {
     pub fn run(mut self) -> Self {
         while self.run_instr() {}
         self
+    }
+
+    pub fn run_until_output(&mut self) -> Option<Number> {
+        loop {
+            if !self.output.is_empty() {
+                return self.output.pop_front();
+            }
+            if !self.run_instr() {
+                return None;
+            }
+        }
     }
 
     fn run_instr(&mut self) -> bool {
@@ -99,7 +110,7 @@ impl Program {
 
     fn output(&mut self, mut op: Number) {
         let val = self.eval_arg(&mut op);
-        self.output.push(val);
+        self.output.push_back(val);
     }
 
     fn cond_jump<P>(&mut self, mut op: Number, pred: P)

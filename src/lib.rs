@@ -4,6 +4,7 @@ use std::fmt::{Debug, Display};
 
 mod input;
 pub mod intcode;
+pub mod permute;
 
 const YEAR: u32 = 2019;
 

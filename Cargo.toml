@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 euclid = "0.20.5"
+itertools = "0.8.2"
 regex = "1"
 reqwest = "0.9.5"
 

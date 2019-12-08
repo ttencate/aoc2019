@@ -1,31 +1,92 @@
-use std::collections::{HashMap, HashSet};
-
-use euclid::{Point2D, Vector2D};
+use euclid::Point2D;
+use itertools::iproduct;
 
 struct Grid;
 type Point = Point2D<i32, Grid>;
-type Vector = Vector2D<i32, Grid>;
-type Wire = HashMap<Point, i32>;
+type Wire = Vec<Segment>;
+#[derive(Debug)]
+enum Segment {
+    Horizontal { x_start: i32, x_end: i32, y: i32, start_dist: i32 },
+    Vertical { x: i32, y_start: i32, y_end: i32, start_dist: i32 },
+}
+
+// Start is always exclusive because we don't want to count intersections at (0, 0).
+fn between(start: i32, x: i32, end: i32) -> bool {
+    if start < end {
+        start < x && x <= end
+    } else {
+        end <= x && x < start
+    }
+}
+
+impl Segment {
+    fn intersect(&self, other: &Segment) -> Option<Point> {
+        use Segment::*;
+        match (self, other) {
+            (Horizontal { x_start, x_end, y, .. }, Vertical { x, y_start, y_end, .. }) => {
+                if between(*x_start, *x, *x_end) && between(*y_start, *y, *y_end) {
+                    return Some(Point::new(*x, *y));
+                }
+            },
+            (Vertical { x, y_start, y_end, .. }, Horizontal { x_start, x_end, y, .. }) => {
+                if between(*x_start, *x, *x_end) && between(*y_start, *y, *y_end) {
+                    return Some(Point::new(*x, *y));
+                }
+            },
+            _ => {
+                // Let's hope we don't get lines that overlap on the same axis.
+                return None;
+            },
+        }
+        None
+    }
+
+    fn start(&self) -> Point {
+        match self {
+            Segment::Horizontal { x_start, y, .. } => Point::new(*x_start, *y),
+            Segment::Vertical { x, y_start, .. } => Point::new(*x, *y_start),
+        }
+    }
+
+    fn start_dist(&self) -> i32 {
+        match self {
+            Segment::Horizontal { start_dist, .. } => *start_dist,
+            Segment::Vertical { start_dist, .. } => *start_dist,
+        }
+    }
+}
 
 fn parse_wire(line: &str) -> Wire {
     let mut wire = Wire::new();
     let mut pos = Point::zero();
-    let mut total_dist = 0;
+    let mut start_dist = 0;
     for instr in line.split(',') {
         let dir = instr.chars().nth(0).unwrap();
         let dist = instr[1..].parse::<i32>().unwrap();
-        let step = match dir {
-            'U' => Vector::new(0, -1),
-            'R' => Vector::new(1, 0),
-            'D' => Vector::new(0, 1),
-            'L' => Vector::new(-1, 0),
+        let mut end = pos;
+        use Segment::*;
+        let segment = match dir {
+            'U' => {
+                end.y -= dist;
+                Vertical { x: pos.x, y_start: pos.y, y_end: end.y, start_dist }
+            }
+            'R' => {
+                end.x += dist;
+                Horizontal { x_start: pos.x, x_end: end.x, y: pos.y, start_dist }
+            }
+            'D' => {
+                end.y += dist;
+                Vertical { x: pos.x, y_start: pos.y, y_end: end.y, start_dist }
+            }
+            'L' => {
+                end.x -= dist;
+                Horizontal { x_start: pos.x, x_end: end.x, y: pos.y, start_dist }
+            }
             _ => panic!("Invalid direction {}", dir)
         };
-        for _ in 0..dist {
-            pos += step;
-            total_dist += 1;
-            wire.insert(pos, total_dist);
-        }
+        wire.push(segment);
+        pos = end;
+        start_dist += dist;
     }
     wire
 }
@@ -34,15 +95,20 @@ fn manhattan_length(p: &Point) -> i32 {
     p.x.abs() + p.y.abs()
 }
 
+fn manhattan_dist(a: &Point, b: &Point) -> i32 {
+    let diff = *b - *a;
+    diff.x.abs() + diff.y.abs()
+}
+
 fn part1(input: &str) -> i32 {
     let wires = input.lines().map(parse_wire).collect::<Vec<_>>();
-    let wire1 = wires[0].keys().collect::<HashSet<_>>();
-    let wire2 = wires[1].keys().collect::<HashSet<_>>();
-    let closest_crossing = wire1
-        .intersection(&wire2)
+    let closest_crossing = iproduct!(wires[0].iter(), wires[1].iter())
+        .filter_map(|(segment1, segment2)| {
+            segment1.intersect(segment2)
+        })
         .min_by_key(|p| manhattan_length(p))
         .unwrap();
-    manhattan_length(closest_crossing)
+    manhattan_length(&closest_crossing)
 }
 
 #[test]
@@ -54,9 +120,12 @@ fn test_part1() {
 
 fn part2(input: &str) -> i32 {
     let wires = input.lines().map(parse_wire).collect::<Vec<_>>();
-    wires[0].iter()
-        .filter_map(|(p, d1)| {
-            wires[1].get(p).map(|d2| d1 + d2)
+    iproduct!(wires[0].iter(), wires[1].iter())
+        .filter_map(|(segment1, segment2)| {
+            segment1.intersect(segment2).map(|intersection| {
+                segment1.start_dist() + manhattan_dist(&segment1.start(), &intersection) +
+                    segment2.start_dist() + manhattan_dist(&segment2.start(), &intersection)
+            })
         })
         .min()
         .unwrap()

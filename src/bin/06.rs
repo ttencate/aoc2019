@@ -11,18 +11,22 @@ fn parse_graph(input: &str) -> Graph {
     graph
 }
 
+fn dist_to_com<'a>(graph: &'a Graph, cache: &mut HashMap::<&'a str, usize>, node: &'a str) -> usize {
+    if cache.contains_key(node) {
+        *cache.get(node).unwrap()
+    } else {
+        let dist = 1 + dist_to_com(graph, cache, &graph[node]);
+        cache.insert(node, dist);
+        dist
+    }
+}
+
 fn part1(input: &str) -> usize {
     let graph = parse_graph(input);
+    let mut cache = HashMap::<&str, usize>::new();
+    cache.insert("COM", 0);
     graph.keys()
-        .map(|leaf| {
-            let mut count = 0;
-            let mut cur = leaf;
-            while cur != "COM" {
-                count += 1;
-                cur = &graph[cur];
-            }
-            count
-        })
+        .map(|node| dist_to_com(&graph, &mut cache, node))
         .sum()
 }
 

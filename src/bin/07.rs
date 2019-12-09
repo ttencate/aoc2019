@@ -2,7 +2,7 @@ use aoc::intcode::*;
 use aoc::permute::*;
 
 fn part1(input: &str) -> Number {
-    let program = Program::new(parse_mem(input));
+    let program = Program::new(Memory::parse(input));
     (0..=4)
         .permute()
         .map(|p| {
@@ -24,7 +24,7 @@ fn test_part1() {
 }
 
 fn part2(input: &str) -> Number {
-    let program = Program::new(parse_mem(input));
+    let program = Program::new(Memory::parse(input));
     (5..=9)
         .permute()
         .map(|p| {

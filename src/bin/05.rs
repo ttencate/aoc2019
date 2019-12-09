@@ -1,13 +1,13 @@
 use aoc::intcode::*;
 
 fn part1(input: &str) -> Number {
-    Program::new(parse_mem(input))
+    Program::new(Memory::parse(input))
         .with_input(vec![1]).run()
         .output.pop_back().unwrap()
 }
 
 fn part2(input: &str) -> Number {
-    Program::new(parse_mem(input))
+    Program::new(Memory::parse(input))
         .with_input(vec![5]).run()
         .output.pop_back().unwrap()
 }

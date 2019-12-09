@@ -1,9 +1,15 @@
-fn part1(_input: &str) -> String {
-    "TODO".to_string()
+use aoc::intcode::*;
+
+fn part1(input: &str) -> Number {
+    let output = Program::new(Memory::parse(input)).with_input(vec![1]).run().output;
+    assert_eq!(output.len(), 1);
+    output[0]
 }
 
-fn part2(_input: &str) -> String {
-    "TODO".to_string()
+fn part2(input: &str) -> Number {
+    let output = Program::new(Memory::parse(input)).with_input(vec![2]).run().output;
+    assert_eq!(output.len(), 1);
+    output[0]
 }
 
 fn main() {
@@ -12,5 +18,5 @@ fn main() {
 
 #[test]
 fn test_answers() {
-    // aoc::test(part1, "TODO".to_string(), part2, "TODO".to_string());
+    aoc::test(part1, 3497884671, part2, 46470);
 }

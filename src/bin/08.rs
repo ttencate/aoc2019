@@ -14,27 +14,32 @@ fn part1(input: &str) -> usize {
 }
 
 fn decode_image(width: usize, height: usize, input: &str) -> String {
-    let mut image = vec![b'.'; width * height];
+    let mut image = vec!['?'; width * height];
     for layer in input.trim().as_bytes().chunks(width * height) {
         for (i, chr) in layer.iter().enumerate() {
             match *chr {
-                BLACK => if image[i] == b'.' {
-                    image[i] = b' ';
+                BLACK => if image[i] == '?' {
+                    image[i] = '░';
                 },
-                WHITE => if image[i] == b'.' {
-                    image[i] = b'#';
+                WHITE => if image[i] == '?' {
+                    image[i] = '█';
                 },
                 TRANSPARENT => {},
                 _ => panic!("Unknown pixel {}", chr),
             }
         }
     }
-    image.chunks(width).map(|row| "\n".to_string() + &String::from_utf8(row.to_vec()).unwrap()).collect::<Vec<String>>().join("")
+    let mut out = String::with_capacity((width + 1) * height);
+    for row in image.chunks(width) {
+        out.push('\n');
+        out.push_str(&row.iter().collect::<String>());
+    }
+    out
 }
 
 #[test]
 fn test_parse_image() {
-    assert_eq!(decode_image(2, 2, "0222112222120000"), "\n #\n# ");
+    assert_eq!(decode_image(2, 2, "0222112222120000"), "\n░█\n█░");
 }
 
 fn part2(input: &str) -> String {
@@ -48,10 +53,10 @@ fn main() {
 #[test]
 fn test_answers() {
     aoc::test(part1, 1088, part2, "
-#     ##  #   ##  # ###  
-#    #  # #   ##  # #  # 
-#    #     # # #### ###  
-#    # ##   #  #  # #  # 
-#    #  #   #  #  # #  # 
-####  ###   #  #  # ###  ".to_string());
+█░░░░░██░░█░░░██░░█░███░░
+█░░░░█░░█░█░░░██░░█░█░░█░
+█░░░░█░░░░░█░█░████░███░░
+█░░░░█░██░░░█░░█░░█░█░░█░
+█░░░░█░░█░░░█░░█░░█░█░░█░
+████░░███░░░█░░█░░█░███░░".to_string());
 }

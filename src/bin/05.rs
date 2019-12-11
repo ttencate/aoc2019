@@ -1,15 +1,15 @@
 use aoc::intcode::*;
 
 fn part1(input: &str) -> Number {
-    Program::new(Memory::parse(input))
-        .with_input(vec![1]).run()
-        .output.pop_back().unwrap()
+    *Program::parse(input)
+        .run_with_io(vec![1])
+        .output.last().unwrap()
 }
 
 fn part2(input: &str) -> Number {
-    Program::new(Memory::parse(input))
-        .with_input(vec![5]).run()
-        .output.pop_back().unwrap()
+    *Program::parse(input)
+        .run_with_io(vec![5])
+        .output.last().unwrap()
 }
 
 fn main() {

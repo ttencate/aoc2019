@@ -2,13 +2,13 @@ use aoc::intcode::*;
 use aoc::permute::*;
 
 fn part1(input: &str) -> Number {
-    let program = Program::new(Memory::parse(input));
+    let program = Program::parse(input);
     (0..=4)
         .permute()
         .map(|p| {
             let mut output = 0;
             for i in 0..5 {
-                output = program.clone().with_input(vec![p[i], output]).run().output[0];
+                output = program.clone().run_with_io(vec![p[i], output]).output[0];
             }
             output
         })
@@ -24,20 +24,35 @@ fn test_part1() {
 }
 
 fn part2(input: &str) -> Number {
-    let program = Program::new(Memory::parse(input));
+    let program = Program::parse(input);
     (5..=9)
         .permute()
         .map(|p| {
-            let mut amps = p.iter().map(|&i| program.clone().with_input(vec![i])).collect::<Vec<_>>();
+            let mut states = p.iter().map(|&i| {
+                Some(match program.clone().run() {
+                    State::Reading(next) => next(i),
+                    _ => panic!("Expected machine to read input first"),
+                })
+            }).collect::<Vec<_>>();
+
             let mut output = 0;
             let mut i = 0;
             loop {
-                amps[i].input.push_back(output);
-                if let Some(o) = amps[i].run_until_output() {
-                    output = o;
-                } else {
-                    break;
-                }
+                let state = states[i].take().unwrap();
+                let state = match state {
+                    State::Reading(next) => next(output),
+                    State::Halted(_) => break,
+                    _ => panic!("Expected machine to read input"),
+                };
+                let state = match state {
+                    State::Writing(val, next) => {
+                        output = val;
+                        next()
+                    },
+                    State::Halted(_) => break,
+                    _ => panic!("Expected machine to write output"),
+                };
+                states[i].replace(state);
                 i = (i + 1) % 5;
             }
             output

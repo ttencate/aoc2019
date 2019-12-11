@@ -1,13 +1,13 @@
 use aoc::intcode::*;
 
 fn part1(input: &str) -> Number {
-    let output = Program::new(Memory::parse(input)).with_input(vec![1]).run().output;
+    let output = Program::parse(input).run_with_io(vec![1]).output;
     assert_eq!(output.len(), 1);
     output[0]
 }
 
 fn part2(input: &str) -> Number {
-    let output = Program::new(Memory::parse(input)).with_input(vec![2]).run().output;
+    let output = Program::parse(input).run_with_io(vec![2]).output;
     assert_eq!(output.len(), 1);
     output[0]
 }

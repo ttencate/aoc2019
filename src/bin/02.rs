@@ -1,15 +1,15 @@
 use aoc::intcode::*;
 
 fn part1(input: &str) -> i64 {
-    let mut program = Program::new(Memory::parse(input));
+    let mut program = Program::parse(input);
     program.mem[1] = 12;
     program.mem[2] = 2;
-    program = program.run();
+    program = program.run_without_io();
     program.mem[0]
 }
 
 fn part2(input: &str) -> i64 {
-    let program = Program::new(Memory::parse(input));
+    let program = Program::parse(input);
     let mut max = 1;
     loop {
         for noun in 0..max {
@@ -17,7 +17,7 @@ fn part2(input: &str) -> i64 {
                 let mut p = program.clone();
                 p.mem[1] = noun;
                 p.mem[2] = verb;
-                p = p.run();
+                p = p.run_without_io();
                 if p.mem[0] == 19690720 {
                     return 100 * noun + verb;
                 }

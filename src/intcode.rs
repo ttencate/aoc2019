@@ -1,4 +1,4 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 
 pub type Number = i64;
 
@@ -44,18 +44,19 @@ impl std::ops::IndexMut<usize> for Memory {
     }
 }
 
-pub type Input = VecDeque<Number>;
-pub type Output = VecDeque<Number>;
-
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Program {
     pub mem: Memory,
-    ip: usize,
-    next_ip: usize,
+    ip: Addr,
     relative_base: Number,
+    cur_ip: Addr,
     cur_op: Number,
-    pub input: Input,
-    pub output: Output,
+}
+
+pub enum State {
+    Reading(Box<dyn FnOnce(Number) -> State>),
+    Writing(Number, Box<dyn FnOnce() -> State>),
+    Halted(Program),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -65,60 +66,76 @@ enum ArgMode {
     Relative,
 }
 
+#[derive(Debug)]
+pub struct ProgramWithOutput {
+    pub program: Program,
+    pub output: Vec<Number>,
+}
+
 impl Program {
     pub fn new(mem: Memory) -> Self {
         Program {
             mem: mem,
             ip: 0,
-            next_ip: 0,
             relative_base: 0,
+            cur_ip: 0,
             cur_op: 0,
-            input: VecDeque::new(),
-            output: VecDeque::new(),
         }
     }
 
-    pub fn with_input(mut self, input: Vec<Number>) -> Self {
-        self.input = input.into();
-        self
+    pub fn parse(input: &str) -> Self {
+        Self::new(Memory::parse(input))
     }
 
-    pub fn run(mut self) -> Self {
-        while self.run_instr() {}
-        self
-    }
-
-    pub fn run_until_output(&mut self) -> Option<Number> {
+    pub fn run(mut self) -> State {
         loop {
-            if !self.output.is_empty() {
-                return self.output.pop_front();
-            }
-            if !self.run_instr() {
-                return None;
+            self.cur_ip = self.ip;
+            self.cur_op = self.mem[self.ip];
+            self.ip += 1;
+            let opcode = self.cur_op % 100;
+            self.cur_op /= 100;
+            match opcode {
+                1 => { self.bin_op(|a, b| a + b); },
+                2 => { self.bin_op(|a, b| a * b); },
+                3 => { return self.input(); },
+                4 => { return self.output(); },
+                5 => { self.cond_jump(|a| a != 0); },
+                6 => { self.cond_jump(|a| a == 0); },
+                7 => { self.bin_op(|a, b| if a < b { 1 } else { 0 }); },
+                8 => { self.bin_op(|a, b| if a == b { 1 } else { 0 }); },
+                9 => { self.rel_base(); },
+                99 => { return State::Halted(self); }
+                _ => { panic!("Invalid opcode {} at address {}", opcode, self.cur_ip); }
             }
         }
     }
 
-    fn run_instr(&mut self) -> bool {
-        self.cur_op = self.mem[self.ip];
-        self.next_ip = self.ip + 1;
-        let opcode = self.cur_op % 100;
-        self.cur_op /= 100;
-        match opcode {
-            1 => { self.bin_op(|a, b| a + b); },
-            2 => { self.bin_op(|a, b| a * b); },
-            3 => { self.input(); },
-            4 => { self.output(); },
-            5 => { self.cond_jump(|a| a != 0); },
-            6 => { self.cond_jump(|a| a == 0); },
-            7 => { self.bin_op(|a, b| if a < b { 1 } else { 0 }); },
-            8 => { self.bin_op(|a, b| if a == b { 1 } else { 0 }); },
-            9 => { self.rel_base(); },
-            99 => { return false; }
-            _ => { panic!("Invalid opcode {} at address {}", opcode, self.ip); }
+    pub fn run_without_io(self) -> Program {
+        match self.run() {
+            State::Reading(_) => panic!("This implementation cannot read input"),
+            State::Writing(_, _) => panic!("This implementation cannot write output"),
+            State::Halted(program) => program,
         }
-        self.ip = self.next_ip;
-        true
+    }
+
+    pub fn run_with_io(self, input: Vec<Number>) -> ProgramWithOutput {
+        let mut input_iter = input.into_iter();
+        let mut output = vec![];
+        let mut state = self.run();
+        loop {
+            state = match state {
+                State::Reading(next) => {
+                    next(input_iter.next().expect("Attempted to read from empty input"))
+                },
+                State::Writing(n, next) => {
+                    output.push(n);
+                    next()
+                },
+                State::Halted(program) => {
+                    return ProgramWithOutput { program, output };
+                },
+            };
+        }
     }
 
     fn arg_mode(&mut self) -> ArgMode {
@@ -128,13 +145,13 @@ impl Program {
             0 => ArgMode::Position,
             1 => ArgMode::Immediate,
             2 => ArgMode::Relative,
-            _ => panic!("Invalid parameter mode {:?} at address {}", mode, self.ip),
+            _ => panic!("Invalid parameter mode {:?} at address {}", mode, self.cur_ip),
         }
     }
 
     fn arg(&mut self) -> Number {
-        let val = self.mem[self.next_ip];
-        self.next_ip += 1;
+        let val = self.mem[self.ip];
+        self.ip += 1;
         val
     }
 
@@ -154,7 +171,7 @@ impl Program {
         match mode {
             ArgMode::Position => to_addr(val),
             ArgMode::Relative => to_addr(val + self.relative_base),
-            _ => panic!("Parameter mode {:?} at address {} not supported for lvalues", mode, self.ip)
+            _ => panic!("Parameter mode {:?} at address {} not supported for lvalues", mode, self.cur_ip)
         }
     }
 
@@ -167,15 +184,19 @@ impl Program {
         self.mem[dest] = f(a, b);
     }
 
-    fn input(&mut self) {
+    fn input(mut self) -> State {
         let dest = self.eval_addr();
-        let val = self.input.pop_front().expect("Tried to read from empty input");
-        self.mem[dest] = val;
+        State::Reading(Box::new(move |val: Number| -> State {
+            self.mem[dest] = val;
+            self.run()
+        }))
     }
 
-    fn output(&mut self) {
+    fn output(mut self) -> State {
         let val = self.eval_arg();
-        self.output.push_back(val);
+        State::Writing(val, Box::new(|| -> State {
+            self.run()
+        }))
     }
 
     fn cond_jump<P>(&mut self, pred: P)
@@ -184,7 +205,7 @@ impl Program {
         let cond = self.eval_arg();
         let dest = self.eval_arg();
         if pred(cond) {
-            self.next_ip = to_addr(dest);
+            self.ip = to_addr(dest);
         }
     }
 
@@ -197,110 +218,163 @@ impl Program {
 #[test]
 fn test_add_mul() {
     assert_eq!(
-        Program::new(Memory::parse("1,9,10,3,2,3,11,0,99,30,40,50")).run().mem,
+        Program::parse("1,9,10,3,2,3,11,0,99,30,40,50")
+            .run_without_io()
+            .mem,
         Memory::parse("3500,9,10,70,2,3,11,0,99,30,40,50"));
     assert_eq!(
-        Program::new(Memory::parse("1,0,0,0,99")).run().mem,
+        Program::parse("1,0,0,0,99")
+            .run_without_io()
+            .mem,
         Memory::parse("2,0,0,0,99"));
     assert_eq!(
-        Program::new(Memory::parse("2,3,0,3,99")).run().mem,
+        Program::parse("2,3,0,3,99")
+            .run_without_io()
+            .mem,
         Memory::parse("2,3,0,6,99"));
     assert_eq!(
-        Program::new(Memory::parse("2,4,4,5,99,0")).run().mem,
+        Program::parse("2,4,4,5,99,0")
+            .run_without_io()
+            .mem,
         Memory::parse("2,4,4,5,99,9801"));
     assert_eq!(
-        Program::new(Memory::parse("1,1,1,4,99,5,6,0,99")).run().mem,
+        Program::parse("1,1,1,4,99,5,6,0,99")
+            .run_without_io()
+            .mem,
         Memory::parse("30,1,1,4,2,5,6,0,99"));
 }
 
 #[test]
 fn test_input_output() {
     assert_eq!(
-        Program::new(Memory::parse("3,0,4,0,99")).with_input(vec![42]).run().output,
+        Program::parse("3,0,4,0,99")
+            .run_with_io(vec![42])
+            .output,
         vec![42]);
 }
 
 #[test]
 fn test_immediate_mode() {
     assert_eq!(
-        Program::new(Memory::parse("1002,4,3,4,33")).run().mem,
+        Program::parse("1002,4,3,4,33")
+            .run_without_io()
+            .mem,
         Memory::parse("1002,4,3,4,99"));
 }
 
 #[test]
 fn test_negative() {
     assert_eq!(
-        Program::new(Memory::parse("1101,100,-1,4,0")).run().mem,
+        Program::parse("1101,100,-1,4,0")
+            .run_without_io()
+            .mem,
         Memory::parse("1101,100,-1,4,99"));
 }
 
 #[test]
 fn test_comparisons() {
     assert_eq!(
-        Program::new(Memory::parse("3,9,8,9,10,9,4,9,99,-1,8")).with_input(vec![8]).run().output,
+        Program::parse("3,9,8,9,10,9,4,9,99,-1,8")
+            .run_with_io(vec![8])
+            .output,
         vec![1]);
     assert_eq!(
-        Program::new(Memory::parse("3,9,8,9,10,9,4,9,99,-1,8")).with_input(vec![7]).run().output,
+        Program::parse("3,9,8,9,10,9,4,9,99,-1,8")
+            .run_with_io(vec![7])
+            .output,
         vec![0]);
 
     assert_eq!(
-        Program::new(Memory::parse("3,9,7,9,10,9,4,9,99,-1,8")).with_input(vec![7]).run().output,
+        Program::parse("3,9,7,9,10,9,4,9,99,-1,8")
+            .run_with_io(vec![7])
+            .output,
         vec![1]);
     assert_eq!(
-        Program::new(Memory::parse("3,9,7,9,10,9,4,9,99,-1,8")).with_input(vec![8]).run().output,
+        Program::parse("3,9,7,9,10,9,4,9,99,-1,8")
+            .run_with_io(vec![8])
+            .output,
         vec![0]);
 
     assert_eq!(
-        Program::new(Memory::parse("3,3,1108,-1,8,3,4,3,99")).with_input(vec![8]).run().output,
+        Program::parse("3,3,1108,-1,8,3,4,3,99")
+            .run_with_io(vec![8])
+            .output,
         vec![1]);
     assert_eq!(
-        Program::new(Memory::parse("3,3,1108,-1,8,3,4,3,99")).with_input(vec![7]).run().output,
+        Program::parse("3,3,1108,-1,8,3,4,3,99")
+            .run_with_io(vec![7])
+            .output,
         vec![0]);
 
     assert_eq!(
-        Program::new(Memory::parse("3,3,1107,-1,8,3,4,3,99")).with_input(vec![7]).run().output,
+        Program::parse("3,3,1107,-1,8,3,4,3,99")
+            .run_with_io(vec![7])
+            .output,
         vec![1]);
     assert_eq!(
-        Program::new(Memory::parse("3,3,1107,-1,8,3,4,3,99")).with_input(vec![8]).run().output,
+        Program::parse("3,3,1107,-1,8,3,4,3,99")
+            .run_with_io(vec![8])
+            .output,
         vec![0]);
 }
 
 #[test]
 fn test_jumps() {
     assert_eq!(
-        Program::new(Memory::parse("3,12,6,12,15,1,13,14,13,4,13,99,-1,0,1,9")).with_input(vec![0]).run().output,
+        Program::parse("3,12,6,12,15,1,13,14,13,4,13,99,-1,0,1,9")
+            .run_with_io(vec![0])
+            .output,
         vec![0]);
     assert_eq!(
-        Program::new(Memory::parse("3,12,6,12,15,1,13,14,13,4,13,99,-1,0,1,9")).with_input(vec![8]).run().output,
+        Program::parse("3,12,6,12,15,1,13,14,13,4,13,99,-1,0,1,9")
+            .run_with_io(vec![8])
+            .output,
         vec![1]);
 
     assert_eq!(
-        Program::new(Memory::parse("3,3,1105,-1,9,1101,0,0,12,4,12,99,1")).with_input(vec![0]).run().output,
+        Program::parse("3,3,1105,-1,9,1101,0,0,12,4,12,99,1")
+            .run_with_io(vec![0])
+            .output,
         vec![0]);
     assert_eq!(
-        Program::new(Memory::parse("3,3,1105,-1,9,1101,0,0,12,4,12,99,1")).with_input(vec![8]).run().output,
+        Program::parse("3,3,1105,-1,9,1101,0,0,12,4,12,99,1")
+            .run_with_io(vec![8])
+            .output,
         vec![1]);
 
     assert_eq!(
-        Program::new(Memory::parse("3,21,1008,21,8,20,1005,20,22,107,8,21,20,1006,20,31,1106,0,36,98,0,0,1002,21,125,20,4,20,1105,1,46,104,999,1105,1,46,1101,1000,1,20,4,20,1105,1,46,98,99")).with_input(vec![7]).run().output,
+        Program::parse("3,21,1008,21,8,20,1005,20,22,107,8,21,20,1006,20,31,1106,0,36,98,0,0,1002,21,125,20,4,20,1105,1,46,104,999,1105,1,46,1101,1000,1,20,4,20,1105,1,46,98,99")
+            .run_with_io(vec![7])
+            .output,
         vec![999]);
     assert_eq!(
-        Program::new(Memory::parse("3,21,1008,21,8,20,1005,20,22,107,8,21,20,1006,20,31,1106,0,36,98,0,0,1002,21,125,20,4,20,1105,1,46,104,999,1105,1,46,1101,1000,1,20,4,20,1105,1,46,98,99")).with_input(vec![8]).run().output,
+        Program::parse("3,21,1008,21,8,20,1005,20,22,107,8,21,20,1006,20,31,1106,0,36,98,0,0,1002,21,125,20,4,20,1105,1,46,104,999,1105,1,46,1101,1000,1,20,4,20,1105,1,46,98,99")
+            .run_with_io(vec![8])
+            .output,
         vec![1000]);
     assert_eq!(
-        Program::new(Memory::parse("3,21,1008,21,8,20,1005,20,22,107,8,21,20,1006,20,31,1106,0,36,98,0,0,1002,21,125,20,4,20,1105,1,46,104,999,1105,1,46,1101,1000,1,20,4,20,1105,1,46,98,99")).with_input(vec![9]).run().output,
+        Program::parse("3,21,1008,21,8,20,1005,20,22,107,8,21,20,1006,20,31,1106,0,36,98,0,0,1002,21,125,20,4,20,1105,1,46,104,999,1105,1,46,1101,1000,1,20,4,20,1105,1,46,98,99")
+            .run_with_io(vec![9])
+            .output,
         vec![1001]);
 }
 
 #[test]
 fn test_relative_mode() {
     assert_eq!(
-        Program::new(Memory::parse("109,1,204,-1,1001,100,1,100,1008,100,16,101,1006,101,0,99")).run().output,
+        Program::parse("109,1,204,-1,1001,100,1,100,1008,100,16,101,1006,101,0,99")
+            .run_with_io(vec![])
+            .output,
         vec![109, 1, 204, -1, 1001, 100, 1, 100, 1008, 100, 16, 101, 1006, 101, 0, 99]);
     assert_eq!(
-        Program::new(Memory::parse("1102,34915192,34915192,7,4,7,99,0")).run().output[0].to_string().len(),
+        Program::parse("1102,34915192,34915192,7,4,7,99,0")
+            .run_with_io(vec![])
+            .output[0].to_string()
+            .len(),
         16);
     assert_eq!(
-        Program::new(Memory::parse("104,1125899906842624,99")).run().output,
+        Program::parse("104,1125899906842624,99")
+            .run_with_io(vec![])
+            .output,
         vec![1125899906842624]);
 }

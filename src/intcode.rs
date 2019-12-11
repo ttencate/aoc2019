@@ -59,6 +59,49 @@ pub enum State {
     Halted(Program),
 }
 
+impl std::fmt::Debug for State {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        match self {
+            State::Reading(_) => write!(f, "Reading(_)"),
+            State::Writing(output, _) => write!(f, "Writing({}, _)", output),
+            State::Halted(program) => write!(f, "Halted({:?})", program),
+        }
+    }
+}
+
+impl State {
+    pub fn give_input(self, input: Number) -> State {
+        match self {
+            State::Reading(next) => next(input),
+            _ => panic!("Attempted to read input in state {:?}", self),
+        }
+    }
+
+    pub fn take_output<F: FnOnce(Number) -> ()>(self, func: F) -> State {
+        match self {
+            State::Writing(output, next) => {
+                func(output);
+                next()
+            },
+            _ => panic!("Attempted to write output in state {:?}", self),
+        }
+    }
+
+    pub fn take_program(self) -> Program {
+        match self {
+            State::Halted(program) => program,
+            _ => panic!("Attempted to take program in state {:?}", self),
+        }
+    }
+
+    pub fn is_halted(&self) -> bool {
+        match self {
+            State::Halted(_) => true,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 enum ArgMode {
     Position,

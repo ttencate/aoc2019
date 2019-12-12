@@ -1,3 +1,4 @@
+use aoc::math::lcm;
 use euclid;
 use regex::Regex;
 
@@ -53,15 +54,35 @@ impl State {
         self
     }
 
-    fn loop_length(&self) -> usize {
-        let mut state = self.clone();
-        state.simulate(1);
-        let mut time = 1;
-        while &state != self {
-            state.simulate(1);
+    fn axis_loop_length(start_pos: Vec<i32>) -> usize {
+        let n = start_pos.len();
+        let start_vel = vec![0; n];
+        let mut pos = start_pos.clone();
+        let mut vel = start_vel.clone();
+        let mut time = 0;
+        loop {
+            for i in 0..n {
+                for j in (i + 1)..n {
+                    let acc = (pos[j] - pos[i]).signum();
+                    vel[i] += acc;
+                    vel[j] -= acc;
+                }
+            }
+            for i in 0..n {
+                pos[i] += vel[i];
+            }
             time += 1;
+            if pos == start_pos && vel == start_vel {
+                return time;
+            }
         }
-        time
+    }
+
+    fn loop_length(&self) -> usize {
+        let x_length = Self::axis_loop_length(self.pos.iter().map(|p| p.x).collect());
+        let y_length = Self::axis_loop_length(self.pos.iter().map(|p| p.y).collect());
+        let z_length = Self::axis_loop_length(self.pos.iter().map(|p| p.z).collect());
+        lcm(lcm(x_length, y_length), z_length)
     }
 
     fn total_energy(&self) -> i32 {
@@ -92,9 +113,9 @@ fn test_loop_length() {
         State::parse("<x=-1, y=0, z=2>\n<x=2, y=-10, z=-7>\n<x=4, y=-8, z=8>\n<x=3, y=5, z=-1>")
             .loop_length(),
         2772);
-    //assert_eq!(State::parse("<x=-8, y=-10, z=0>\n<x=5, y=5, z=10>\n<x=2, y=-7, z=3>\n<x=9, y=-8, z=-3>")
-    //        .loop_length(),
-    //    4686774924);
+    assert_eq!(State::parse("<x=-8, y=-10, z=0>\n<x=5, y=5, z=10>\n<x=2, y=-7, z=3>\n<x=9, y=-8, z=-3>")
+            .loop_length(),
+        4686774924);
 }
 
 fn part1(input: &str) -> i32 {
@@ -114,5 +135,5 @@ fn main() {
 
 #[test]
 fn test_answers() {
-    // aoc::test(part1, "TODO".to_string(), part2, "TODO".to_string());
+    aoc::test(part1, 14907, part2, 467081194429464);
 }

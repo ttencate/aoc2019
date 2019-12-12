@@ -1,5 +1,6 @@
 use euclid::{Point2D, Vector2D};
 use itertools::iproduct;
+use aoc::math::gcd;
 use std::cmp::Ordering;
 
 struct Grid;
@@ -37,15 +38,6 @@ fn find_asteroids(map: &Map) -> Vec<Coord> {
             if map[c] == ASTEROID { Some(c) } else { None }
         })
         .collect()
-}
-
-fn gcd(mut a: i32, mut b: i32) -> i32 {
-    while b != 0 {
-        let t = b;
-        b = a % b;
-        a = t;
-    }
-    a
 }
 
 fn have_line_of_sight(map: &Map, a: Coord, b: Coord) -> bool {

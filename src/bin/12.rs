@@ -1,6 +1,6 @@
 use aoc::math::lcm;
 use euclid;
-use packed_simd::i32x4;
+use packed_simd::{i32x4, shuffle};
 use regex::Regex;
 
 struct Grid;
@@ -31,12 +31,12 @@ struct State {
     vel: Vec<Velocity>,
 }
 
-const MINUS_ONE: i32x4 = i32x4::new(-1, -1, -1, -1);
-const PLUS_ONE: i32x4 = i32x4::new(1, 1, 1, 1);
-const ZERO: i32x4 = i32x4::new(0, 0, 0, 0);
+const MINUS_ONE: i32x4 = i32x4::splat(-1);
+const PLUS_ONE: i32x4 = i32x4::splat(1);
+const ZERO: i32x4 = i32x4::splat(0);
 
-fn signum_simd(a: i32x4, b: i32x4) -> i32x4 {
-    a.lt(b).select(MINUS_ONE, ZERO) + a.gt(b).select(PLUS_ONE, ZERO)
+fn simd_acc(a: i32x4, b: i32x4) -> i32 {
+    (a.lt(b).select(MINUS_ONE, ZERO) + a.gt(b).select(PLUS_ONE, ZERO)).wrapping_sum()
 }
 
 impl State {
@@ -71,15 +71,13 @@ impl State {
         let mut vel = start_vel;
         let mut time = 0;
         loop {
-            unsafe {
-                let a0 = signum_simd(pos, i32x4::splat(pos.extract_unchecked(0))).wrapping_sum();
-                let a1 = signum_simd(pos, i32x4::splat(pos.extract_unchecked(1))).wrapping_sum();
-                let a2 = signum_simd(pos, i32x4::splat(pos.extract_unchecked(2))).wrapping_sum();
-                let a3 = signum_simd(pos, i32x4::splat(pos.extract_unchecked(3))).wrapping_sum();
-                let acc = i32x4::new(a0, a1, a2, a3);
-                vel += acc;
-                pos += vel;
-            }
+            let acc = i32x4::new(
+                simd_acc(pos, shuffle!(pos, [0, 0, 0, 0])),
+                simd_acc(pos, shuffle!(pos, [1, 1, 1, 1])),
+                simd_acc(pos, shuffle!(pos, [2, 2, 2, 2])),
+                simd_acc(pos, shuffle!(pos, [3, 3, 3, 3])));
+            vel += acc;
+            pos += vel;
 
             time += 1;
             if pos == start_pos && vel == start_vel {

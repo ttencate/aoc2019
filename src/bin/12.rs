@@ -63,19 +63,21 @@ impl State {
         let mut vel = start_vel;
         let mut time = 0;
         loop {
-            let acc = i32x4::new(
-                (pos.extract(1) - pos.extract(0)).signum() +
-                (pos.extract(2) - pos.extract(0)).signum() +
-                (pos.extract(3) - pos.extract(0)).signum(),
-                (pos.extract(0) - pos.extract(1)).signum() +
-                (pos.extract(2) - pos.extract(1)).signum() +
-                (pos.extract(3) - pos.extract(1)).signum(),
-                (pos.extract(0) - pos.extract(2)).signum() +
-                (pos.extract(1) - pos.extract(2)).signum() +
-                (pos.extract(3) - pos.extract(2)).signum(),
-                (pos.extract(0) - pos.extract(3)).signum() +
-                (pos.extract(1) - pos.extract(3)).signum() +
-                (pos.extract(2) - pos.extract(3)).signum());
+            let acc = unsafe {
+                i32x4::new(
+                    (pos.extract_unchecked(1) - pos.extract_unchecked(0)).signum() +
+                    (pos.extract_unchecked(2) - pos.extract_unchecked(0)).signum() +
+                    (pos.extract_unchecked(3) - pos.extract_unchecked(0)).signum(),
+                    (pos.extract_unchecked(0) - pos.extract_unchecked(1)).signum() +
+                    (pos.extract_unchecked(2) - pos.extract_unchecked(1)).signum() +
+                    (pos.extract_unchecked(3) - pos.extract_unchecked(1)).signum(),
+                    (pos.extract_unchecked(0) - pos.extract_unchecked(2)).signum() +
+                    (pos.extract_unchecked(1) - pos.extract_unchecked(2)).signum() +
+                    (pos.extract_unchecked(3) - pos.extract_unchecked(2)).signum(),
+                    (pos.extract_unchecked(0) - pos.extract_unchecked(3)).signum() +
+                    (pos.extract_unchecked(1) - pos.extract_unchecked(3)).signum() +
+                    (pos.extract_unchecked(2) - pos.extract_unchecked(3)).signum())
+            };
             vel += acc;
             pos += vel;
 

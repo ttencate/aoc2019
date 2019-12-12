@@ -54,23 +54,43 @@ impl State {
         self
     }
 
-    fn axis_loop_length(start_pos: Vec<i32>) -> usize {
+    fn axis_loop_length(mut start_pos: Vec<i32>) -> usize {
         let n = start_pos.len();
-        let start_vel = vec![0; n];
+        let mut start_vel = vec![0i32; n];
         let mut pos = start_pos.clone();
         let mut vel = start_vel.clone();
         let mut time = 0;
         loop {
-            for i in 0..n {
-                for j in (i + 1)..n {
-                    let acc = (pos[j] - pos[i]).signum();
-                    vel[i] += acc;
-                    vel[j] -= acc;
+            let mut changed = true;
+            while changed {
+                changed = false;
+                for i in 1..n {
+                    if pos[i - 1] > pos[i] {
+                        pos.swap(i - 1, i);
+                        vel.swap(i - 1, i);
+                        start_pos.swap(i - 1, i);
+                        start_vel.swap(i - 1, i);
+                        changed = true;
+                    }
                 }
+            }
+
+            for i in 0..n {
+                let mut left = i;
+                while left > 0 && pos[left - 1] == pos[i] {
+                    left -= 1;
+                }
+                let mut right = i;
+                while right < n && pos[right] == pos[i] {
+                    right += 1;
+                }
+                let acc = (n as i32 - right as i32) - left as i32;
+                vel[i] += acc;
             }
             for i in 0..n {
                 pos[i] += vel[i];
             }
+
             time += 1;
             if pos == start_pos && vel == start_vel {
                 return time;
@@ -105,6 +125,11 @@ fn test_simulate() {
             .simulate(100)
             .total_energy(),
         1940);
+}
+
+#[test]
+fn test_axis_loop_length() {
+    assert_eq!(State::axis_loop_length(vec![-1, 1]), 6);
 }
 
 #[test]

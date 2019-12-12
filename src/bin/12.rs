@@ -1,5 +1,6 @@
 use aoc::math::lcm;
 use euclid;
+use packed_simd::i32x4;
 use regex::Regex;
 
 struct Grid;
@@ -56,31 +57,27 @@ impl State {
 
     fn axis_loop_length(start_pos: Vec<i32>) -> usize {
         assert_eq!(start_pos.len(), 4);
-        let n = 4;
-        let start_vel = vec![0i32; n];
-        let mut pos = start_pos.clone();
-        let mut vel = start_vel.clone();
+        let start_pos = i32x4::from_slice_unaligned(&start_pos);
+        let start_vel = i32x4::from_slice_unaligned(&vec![0; 4]);
+        let mut pos = start_pos;
+        let mut vel = start_vel;
         let mut time = 0;
         loop {
-            vel[0] +=
-                (pos[1] - pos[0]).signum() +
-                (pos[2] - pos[0]).signum() +
-                (pos[3] - pos[0]).signum();
-            vel[1] +=
-                (pos[0] - pos[1]).signum() +
-                (pos[2] - pos[1]).signum() +
-                (pos[3] - pos[1]).signum();
-            vel[2] +=
-                (pos[0] - pos[2]).signum() +
-                (pos[1] - pos[2]).signum() +
-                (pos[3] - pos[2]).signum();
-            vel[3] +=
-                (pos[0] - pos[3]).signum() +
-                (pos[1] - pos[3]).signum() +
-                (pos[2] - pos[3]).signum();
-            for i in 0..n {
-                pos[i] += vel[i];
-            }
+            let acc = i32x4::new(
+                (pos.extract(1) - pos.extract(0)).signum() +
+                (pos.extract(2) - pos.extract(0)).signum() +
+                (pos.extract(3) - pos.extract(0)).signum(),
+                (pos.extract(0) - pos.extract(1)).signum() +
+                (pos.extract(2) - pos.extract(1)).signum() +
+                (pos.extract(3) - pos.extract(1)).signum(),
+                (pos.extract(0) - pos.extract(2)).signum() +
+                (pos.extract(1) - pos.extract(2)).signum() +
+                (pos.extract(3) - pos.extract(2)).signum(),
+                (pos.extract(0) - pos.extract(3)).signum() +
+                (pos.extract(1) - pos.extract(3)).signum() +
+                (pos.extract(2) - pos.extract(3)).signum());
+            vel += acc;
+            pos += vel;
 
             time += 1;
             if pos == start_pos && vel == start_vel {

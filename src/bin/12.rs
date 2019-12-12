@@ -66,7 +66,7 @@ impl State {
     fn axis_loop_length(start_pos: Vec<i32>) -> usize {
         assert_eq!(start_pos.len(), 4);
         let start_pos = i32x4::from_slice_unaligned(&start_pos);
-        let start_vel = i32x4::from_slice_unaligned(&vec![0; 4]);
+        let start_vel = i32x4::splat(0);
         let mut pos = start_pos;
         let mut vel = start_vel;
         let mut time = 0;

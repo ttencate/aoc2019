@@ -1,60 +1,60 @@
 use std::collections::{HashMap, HashSet};
 
-type Chemical = String;
+type Chemical<'a> = &'a str;
 
 #[derive(Debug)]
-struct Reaction {
-    inputs: HashMap<Chemical, usize>,
-    output_chemical: Chemical,
+struct Reaction<'a> {
+    inputs: HashMap<Chemical<'a>, usize>,
+    output_chemical: Chemical<'a>,
     output_quantity: usize,
 }
 
-fn parse_chemical_quantity(input: &str) -> (Chemical, usize) {
+fn parse_chemical_quantity<'a>(input: &'a str) -> (Chemical<'a>, usize) {
     let mut parts = input.trim().split(' ');
     let quantity = parts.next().unwrap().parse::<usize>().unwrap();
-    let chemical = parts.next().unwrap().to_string();
+    let chemical = parts.next().unwrap();
     (chemical, quantity)
 }
 
-fn parse_input(input: &str) -> HashMap<Chemical, Reaction> {
+fn parse_input<'a>(input: &'a str) -> HashMap<Chemical<'a>, Reaction<'a>> {
     input.lines()
         .map(|line| {
             let mut split = line.split("=>");
             let inputs = split.next().unwrap().split(",").map(parse_chemical_quantity).collect();
             let (output_chemical, output_quantity) = parse_chemical_quantity(split.next().unwrap());
             let reaction = Reaction { inputs, output_chemical, output_quantity };
-            (reaction.output_chemical.to_string(), reaction)
+            (reaction.output_chemical, reaction)
         })
         .collect()
 }
 
-fn dfs(reactions: &HashMap<Chemical, Reaction>, node: Chemical, sorted: &mut Vec<Chemical>, visited: &mut HashSet<Chemical>) {
+fn dfs<'a>(reactions: &HashMap<Chemical<'a>, Reaction<'a>>, node: Chemical<'a>, sorted: &mut Vec<Chemical<'a>>, visited: &mut HashSet<Chemical<'a>>) {
     if let Some(reaction) = reactions.get(&node) {
         for input_chemical in reaction.inputs.keys() {
-            dfs(reactions, input_chemical.to_string(), sorted, visited);
+            dfs(reactions, input_chemical, sorted, visited);
         }
     }
-    if visited.insert(node.to_string()) {
+    if visited.insert(node) {
         sorted.push(node);
     }
 }
 
-fn topological_sort(mut reactions: HashMap<Chemical, Reaction>) -> Vec<Reaction> {
+fn topological_sort<'a>(mut reactions: HashMap<Chemical<'a>, Reaction<'a>>) -> Vec<Reaction<'a>> {
     let mut sorted = Vec::new();
     let mut visited = HashSet::new();
-    dfs(&reactions, "FUEL".to_string(), &mut sorted, &mut visited);
-    assert_eq!(sorted.first().unwrap(), "ORE");
-    assert_eq!(sorted.last().unwrap(), "FUEL");
+    dfs(&reactions, "FUEL", &mut sorted, &mut visited);
+    assert_eq!(sorted.first().unwrap(), &"ORE");
+    assert_eq!(sorted.last().unwrap(), &"FUEL");
     sorted.into_iter().skip(1).map(|chemical| reactions.remove(&chemical).unwrap()).collect()
 }
 
-fn ore_needed_for_fuel(fuel_quantity: usize, ordered_reactions: &Vec<Reaction>) -> usize {
+fn ore_needed_for_fuel<'a>(fuel_quantity: usize, ordered_reactions: &Vec<Reaction<'a>>) -> usize {
     let mut needed = HashMap::<Chemical, usize>::new();
-    needed.insert("FUEL".to_string(), fuel_quantity);
+    needed.insert("FUEL", fuel_quantity);
     for reaction in ordered_reactions.iter().rev() {
         let num_runs = (*needed.get(&reaction.output_chemical).unwrap_or(&0) + reaction.output_quantity - 1) / reaction.output_quantity;
         for (input_chemical, input_quantity) in &reaction.inputs {
-            *needed.entry(input_chemical.to_string()).or_default() += num_runs * input_quantity;
+            *needed.entry(input_chemical).or_default() += num_runs * input_quantity;
         }
     }
     *needed.get("ORE").unwrap()
@@ -153,7 +153,7 @@ fn test_part1() {
         2210736);
 }
 
-fn max_fuel_from_ore(input_ore: usize, ordered_reactions: &Vec<Reaction>) -> usize {
+fn max_fuel_from_ore<'a>(input_ore: usize, ordered_reactions: &Vec<Reaction<'a>>) -> usize {
     let mut upper_fuel = 1;
     while ore_needed_for_fuel(upper_fuel, ordered_reactions) <= input_ore {
         upper_fuel *= 2;

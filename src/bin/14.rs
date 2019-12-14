@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 type Chemical = String;
 
@@ -7,48 +7,6 @@ struct Reaction {
     inputs: HashMap<Chemical, usize>,
     output_chemical: Chemical,
     output_quantity: usize,
-}
-
-#[derive(Debug, Default)]
-struct Reactor {
-    have: HashMap<Chemical, usize>,
-    mined_ore: usize,
-}
-
-impl Reactor {
-    fn run_reaction(&mut self, reaction: &Reaction, num_runs: usize, reactions: &HashMap<Chemical, Reaction>) {
-        assert!(num_runs > 0);
-        for (input_chemical, input_quantity) in &reaction.inputs {
-            let need_quantity = input_quantity * num_runs;
-            self.ensure_have(input_chemical.to_string(), need_quantity, reactions);
-            assert!(*self.have.entry(input_chemical.to_string()).or_default() >= need_quantity);
-            *self.have.entry(input_chemical.to_string()).or_default() -= need_quantity;
-        }
-        *self.have.entry(reaction.output_chemical.to_string()).or_default() += reaction.output_quantity * num_runs;
-    }
-
-    fn ensure_have(&mut self, chemical: Chemical, quantity: usize, reactions: &HashMap<Chemical, Reaction>) {
-        if chemical == "ORE" {
-            self.mine_ore(quantity);
-            *self.have.entry("ORE".to_string()).or_default() += quantity;
-        } else {
-            let have_quantity = *self.have.get(&chemical).unwrap_or(&0);
-            if have_quantity < quantity {
-                let reaction = reactions.get(&chemical).unwrap().clone();
-                let num_runs = (quantity - have_quantity + reaction.output_quantity - 1) / reaction.output_quantity;
-                self.run_reaction(reaction, num_runs, reactions);
-            }
-            assert!(*self.have.entry(chemical).or_default() >= quantity);
-        }
-    }
-
-    fn mine_ore(&mut self, quantity: usize) {
-        self.mined_ore += quantity;
-    }
-
-    fn produce_max(&mut self, chemical: Chemical, reactions: &HashMap<Chemical, Reaction>) -> usize {
-        *self.have.get(chemical).unwrap()
-    }
 }
 
 fn parse_chemical_quantity(input: &str) -> (Chemical, usize) {
@@ -70,11 +28,64 @@ fn parse_input(input: &str) -> HashMap<Chemical, Reaction> {
         .collect()
 }
 
+fn dfs(reactions: &HashMap<Chemical, Reaction>, node: Chemical, sorted: &mut Vec<Chemical>, visited: &mut HashSet<Chemical>) {
+    if let Some(reaction) = reactions.get(&node) {
+        for input_chemical in reaction.inputs.keys() {
+            dfs(reactions, input_chemical.to_string(), sorted, visited);
+        }
+    }
+    if visited.insert(node.to_string()) {
+        sorted.push(node);
+    }
+}
+
+fn topological_sort(mut reactions: HashMap<Chemical, Reaction>) -> Vec<Reaction> {
+    let mut sorted = Vec::new();
+    let mut visited = HashSet::new();
+    dfs(&reactions, "FUEL".to_string(), &mut sorted, &mut visited);
+    assert_eq!(sorted.first().unwrap(), "ORE");
+    assert_eq!(sorted.last().unwrap(), "FUEL");
+    sorted.into_iter().skip(1).map(|chemical| reactions.remove(&chemical).unwrap()).collect()
+}
+
+fn ore_needed_for_fuel(fuel_quantity: usize, ordered_reactions: &Vec<Reaction>) -> usize {
+    let mut needed = HashMap::<Chemical, usize>::new();
+    needed.insert("FUEL".to_string(), fuel_quantity);
+    for reaction in ordered_reactions.iter().rev() {
+        let num_runs = (*needed.get(&reaction.output_chemical).unwrap_or(&0) + reaction.output_quantity - 1) / reaction.output_quantity;
+        for (input_chemical, input_quantity) in &reaction.inputs {
+            *needed.entry(input_chemical.to_string()).or_default() += num_runs * input_quantity;
+        }
+    }
+    *needed.get("ORE").unwrap()
+}
+
+#[test]
+fn test_ore_needed_for_fuel() {
+    let a = topological_sort(parse_input(
+        "10 ORE => 10 A
+         1 A => 1 FUEL"));
+    assert_eq!(ore_needed_for_fuel(1, &a), 10);
+    assert_eq!(ore_needed_for_fuel(9, &a), 10);
+    assert_eq!(ore_needed_for_fuel(10, &a), 10);
+    assert_eq!(ore_needed_for_fuel(20, &a), 20);
+
+    let ab = topological_sort(parse_input(
+        "10 ORE => 10 A
+         1 ORE => 1 B
+         1 A, 1 B => 1 FUEL"));
+    assert_eq!(ore_needed_for_fuel(1, &ab), 11);
+    assert_eq!(ore_needed_for_fuel(2, &ab), 12);
+    assert_eq!(ore_needed_for_fuel(10, &ab), 20);
+    assert_eq!(ore_needed_for_fuel(11, &ab), 31);
+    assert_eq!(ore_needed_for_fuel(19, &ab), 39);
+    assert_eq!(ore_needed_for_fuel(20, &ab), 40);
+    assert_eq!(ore_needed_for_fuel(21, &ab), 51);
+}
+
 fn part1(input: &str) -> usize {
-    let reactions = parse_input(input);
-    let mut reactor = Reactor::default();
-    reactor.ensure_have("FUEL".to_string(), 1, &reactions);
-    reactor.mined_ore
+    let reactions = topological_sort(parse_input(input));
+    ore_needed_for_fuel(1, &reactions)
 }
 
 #[test]
@@ -142,11 +153,48 @@ fn test_part1() {
         2210736);
 }
 
+fn max_fuel_from_ore(input_ore: usize, ordered_reactions: &Vec<Reaction>) -> usize {
+    let mut upper_fuel = 1;
+    while ore_needed_for_fuel(upper_fuel, ordered_reactions) <= input_ore {
+        upper_fuel *= 2;
+    }
+    let mut lower_fuel = 0;
+    while lower_fuel + 1 < upper_fuel {
+        let mid_fuel = (lower_fuel + upper_fuel) / 2;
+        if ore_needed_for_fuel(mid_fuel, ordered_reactions) <= input_ore {
+            lower_fuel = mid_fuel;
+        } else {
+            upper_fuel = mid_fuel;
+        }
+    }
+    lower_fuel
+}
+
+#[test]
+fn test_max_fuel_from_ore() {
+    let a = &topological_sort(parse_input(
+        "10 ORE => 10 A
+         1 A => 1 FUEL"));
+    assert_eq!(max_fuel_from_ore(1, &a), 0);
+    assert_eq!(max_fuel_from_ore(9, &a), 0);
+    assert_eq!(max_fuel_from_ore(10, &a), 10);
+    assert_eq!(max_fuel_from_ore(11, &a), 10);
+
+    let ab = &topological_sort(parse_input(
+        "10 ORE => 10 A
+         1 ORE => 1 B
+         1 A, 1 B => 1 FUEL"));
+    assert_eq!(max_fuel_from_ore(1, &ab), 0);
+    assert_eq!(max_fuel_from_ore(10, &ab), 0); // !!!
+    assert_eq!(max_fuel_from_ore(11, &ab), 1);
+    assert_eq!(max_fuel_from_ore(12, &ab), 2);
+    assert_eq!(max_fuel_from_ore(20, &ab), 10);
+    assert_eq!(max_fuel_from_ore(21, &ab), 10);
+}
+
 fn part2(input: &str) -> usize {
-    let reactions = parse_input(input);
-    let mut reactor = Reactor::default();
-    reactor.have.insert("ORE".to_string(), 1000000000000);
-    reactor.produce_max("FUEL".to_string(), &reactions)
+    let reactions = topological_sort(parse_input(input));
+    max_fuel_from_ore(1_000_000_000_000, &reactions)
 }
 
 #[test]
@@ -203,5 +251,5 @@ fn main() {
 
 #[test]
 fn test_answers() {
-    // aoc::test(part1, "TODO".to_string(), part2, "TODO".to_string());
+    aoc::test(part1, 579797, part2, 2521844);
 }

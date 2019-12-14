@@ -1,26 +1,38 @@
 use std::collections::{HashMap, HashSet};
 
-type Chemical<'a> = &'a str;
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+enum Chemical {
+    Ore,
+    Fuel,
+    Other(u8),
+}
 
 #[derive(Debug)]
-struct Reaction<'a> {
-    inputs: HashMap<Chemical<'a>, usize>,
-    output_chemical: Chemical<'a>,
+struct Reaction {
+    inputs: HashMap<Chemical, usize>,
+    output_chemical: Chemical,
     output_quantity: usize,
 }
 
-fn parse_chemical_quantity<'a>(input: &'a str) -> (Chemical<'a>, usize) {
-    let mut parts = input.trim().split(' ');
-    let quantity = parts.next().unwrap().parse::<usize>().unwrap();
-    let chemical = parts.next().unwrap();
-    (chemical, quantity)
-}
-
-fn parse_input<'a>(input: &'a str) -> HashMap<Chemical<'a>, Reaction<'a>> {
+fn parse_input(input: &str) -> HashMap<Chemical, Reaction> {
+    let mut string_to_chemical = HashMap::<String, Chemical>::new();
+    string_to_chemical.insert("ORE".to_string(), Chemical::Ore);
+    string_to_chemical.insert("FUEL".to_string(), Chemical::Fuel);
+    let mut next_chemical_id = 0;
+    let mut parse_chemical_quantity = |input: &str| -> (Chemical, usize) {
+        let mut parts = input.trim().split(' ');
+        let quantity = parts.next().unwrap().parse::<usize>().unwrap();
+        let chemical_name = parts.next().unwrap();
+        let chemical = *string_to_chemical.entry(chemical_name.to_string()).or_insert_with(|| {
+            next_chemical_id += 1;
+            Chemical::Other(next_chemical_id)
+        });
+        (chemical, quantity)
+    };
     input.lines()
         .map(|line| {
             let mut split = line.split("=>");
-            let inputs = split.next().unwrap().split(",").map(parse_chemical_quantity).collect();
+            let inputs = split.next().unwrap().split(",").map(&mut parse_chemical_quantity).collect();
             let (output_chemical, output_quantity) = parse_chemical_quantity(split.next().unwrap());
             let reaction = Reaction { inputs, output_chemical, output_quantity };
             (reaction.output_chemical, reaction)
@@ -28,10 +40,10 @@ fn parse_input<'a>(input: &'a str) -> HashMap<Chemical<'a>, Reaction<'a>> {
         .collect()
 }
 
-fn dfs<'a>(reactions: &HashMap<Chemical<'a>, Reaction<'a>>, node: Chemical<'a>, sorted: &mut Vec<Chemical<'a>>, visited: &mut HashSet<Chemical<'a>>) {
+fn dfs(reactions: &HashMap<Chemical, Reaction>, node: Chemical, sorted: &mut Vec<Chemical>, visited: &mut HashSet<Chemical>) {
     if let Some(reaction) = reactions.get(&node) {
         for input_chemical in reaction.inputs.keys() {
-            dfs(reactions, input_chemical, sorted, visited);
+            dfs(reactions, *input_chemical, sorted, visited);
         }
     }
     if visited.insert(node) {
@@ -39,25 +51,25 @@ fn dfs<'a>(reactions: &HashMap<Chemical<'a>, Reaction<'a>>, node: Chemical<'a>, 
     }
 }
 
-fn topological_sort<'a>(mut reactions: HashMap<Chemical<'a>, Reaction<'a>>) -> Vec<Reaction<'a>> {
+fn topological_sort(mut reactions: HashMap<Chemical, Reaction>) -> Vec<Reaction> {
     let mut sorted = Vec::new();
     let mut visited = HashSet::new();
-    dfs(&reactions, "FUEL", &mut sorted, &mut visited);
-    assert_eq!(sorted.first().unwrap(), &"ORE");
-    assert_eq!(sorted.last().unwrap(), &"FUEL");
+    dfs(&reactions, Chemical::Fuel, &mut sorted, &mut visited);
+    assert_eq!(*sorted.first().unwrap(), Chemical::Ore);
+    assert_eq!(*sorted.last().unwrap(), Chemical::Fuel);
     sorted.into_iter().skip(1).map(|chemical| reactions.remove(&chemical).unwrap()).collect()
 }
 
-fn ore_needed_for_fuel<'a>(fuel_quantity: usize, ordered_reactions: &Vec<Reaction<'a>>) -> usize {
+fn ore_needed_for_fuel(fuel_quantity: usize, ordered_reactions: &Vec<Reaction>) -> usize {
     let mut needed = HashMap::<Chemical, usize>::new();
-    needed.insert("FUEL", fuel_quantity);
+    needed.insert(Chemical::Fuel, fuel_quantity);
     for reaction in ordered_reactions.iter().rev() {
         let num_runs = (*needed.get(&reaction.output_chemical).unwrap_or(&0) + reaction.output_quantity - 1) / reaction.output_quantity;
         for (input_chemical, input_quantity) in &reaction.inputs {
-            *needed.entry(input_chemical).or_default() += num_runs * input_quantity;
+            *needed.entry(*input_chemical).or_default() += num_runs * input_quantity;
         }
     }
-    *needed.get("ORE").unwrap()
+    *needed.get(&Chemical::Ore).unwrap()
 }
 
 #[test]
@@ -153,7 +165,7 @@ fn test_part1() {
         2210736);
 }
 
-fn max_fuel_from_ore<'a>(input_ore: usize, ordered_reactions: &Vec<Reaction<'a>>) -> usize {
+fn max_fuel_from_ore(input_ore: usize, ordered_reactions: &Vec<Reaction>) -> usize {
     let mut upper_fuel = 1;
     while ore_needed_for_fuel(upper_fuel, ordered_reactions) <= input_ore {
         upper_fuel *= 2;
@@ -185,7 +197,7 @@ fn test_max_fuel_from_ore() {
          1 ORE => 1 B
          1 A, 1 B => 1 FUEL"));
     assert_eq!(max_fuel_from_ore(1, &ab), 0);
-    assert_eq!(max_fuel_from_ore(10, &ab), 0); // !!!
+    assert_eq!(max_fuel_from_ore(10, &ab), 0);
     assert_eq!(max_fuel_from_ore(11, &ab), 1);
     assert_eq!(max_fuel_from_ore(12, &ab), 2);
     assert_eq!(max_fuel_from_ore(20, &ab), 10);

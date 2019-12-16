@@ -39,8 +39,42 @@ fn part1(input: &str) -> String {
     vec_to_string(&fft(&str_to_vec(input), 100)[0..8])
 }
 
-fn part2(_input: &str) -> String {
-    "TODO".to_string()
+fn fft_tail(input: &[i32], num_phases: usize, offset: usize) -> Vec<i32> {
+    let n = input.len();
+    assert!(offset >= n / 2);
+    let mut cur = input[offset..].to_vec();
+    for _ in 0..num_phases {
+        let mut cum_sum = 0;
+        for i in (0..(n - offset)).rev() {
+            cum_sum += cur[i];
+            cur[i] = (cum_sum % 10).abs();
+        }
+    }
+    cur
+}
+
+#[test]
+fn test_fft_tail() {
+    assert_eq!(fft_tail(&str_to_vec("12345678"), 4, 4), str_to_vec("9498"));
+    assert_eq!(fft_tail(&str_to_vec("12345678"), 4, 5), str_to_vec("498"));
+    assert_eq!(fft_tail(&str_to_vec("12345678"), 4, 6), str_to_vec("98"));
+    assert_eq!(fft_tail(&str_to_vec("12345678"), 4, 7), str_to_vec("8"));
+}
+
+fn real_signal(input: &[i32]) -> Vec<i32> {
+    let offset = vec_to_string(&input[0..7]).parse::<usize>().unwrap();
+    fft_tail(&input.repeat(10000), 100, offset)[0..8].to_vec()
+}
+
+#[test]
+fn test_real_signal() {
+    assert_eq!(real_signal(&str_to_vec("03036732577212944063491565474664")), str_to_vec("84462026"));
+    assert_eq!(real_signal(&str_to_vec("02935109699940807407585447034323")), str_to_vec("78725270"));
+    assert_eq!(real_signal(&str_to_vec("03081770884921959731165446850517")), str_to_vec("53553731"));
+}
+
+fn part2(input: &str) -> String {
+    vec_to_string(&real_signal(&str_to_vec(input)))
 }
 
 fn main() {
@@ -49,5 +83,5 @@ fn main() {
 
 #[test]
 fn test_answers() {
-    // aoc::test(part1, "TODO".to_string(), part2, "TODO".to_string());
+    aoc::test(part1, "34694616".to_string(), part2, "17069048".to_string());
 }

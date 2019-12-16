@@ -1,4 +1,7 @@
-use itertools::iproduct;
+use packed_simd::Simd;
+
+const LANES: usize = 16;
+type V = Simd<[i32; LANES]>;
 
 const PATTERN: [i32; 4] = [0, 1, 0, -1];
 
@@ -10,18 +13,71 @@ fn vec_to_string(v: &[i32]) -> String {
     String::from_utf8(v.iter().map(|&x| b'0' + x as u8).collect()).unwrap()
 }
 
+#[derive(Debug, Clone)]
+struct SimdVec {
+    main: Vec<V>,
+    rest: Vec<i32>,
+}
+
+impl std::iter::FromIterator<i32> for SimdVec {
+    fn from_iter<I: IntoIterator<Item=i32>>(input: I) -> Self {
+        let v = input.into_iter().collect::<Vec<_>>();
+        let mut main = Vec::with_capacity(v.len() / LANES);
+        let mut iter = v.chunks_exact(LANES);
+        while let Some(chunk) = iter.next() {
+            main.push(V::from_slice_unaligned(chunk));
+        }
+        let rest = iter.remainder().to_vec();
+        SimdVec {
+            main,
+            rest,
+        }
+    }
+}
+
+impl From<SimdVec> for Vec<i32> {
+    fn from(v: SimdVec) -> Self {
+        let mut out = Vec::with_capacity(v.main.len() * LANES + v.rest.len());
+        for s in v.main {
+            let mut slice = [0; LANES];
+            s.write_to_slice_unaligned(&mut slice);
+            out.extend(&slice);
+        }
+        out.extend(v.rest);
+        out
+    }
+}
+
+impl SimdVec {
+    fn last_digit_of_dot_product(&self, other: &SimdVec) -> i32 {
+        assert!(self.main.len() == other.main.len());
+        assert!(self.rest.len() == other.rest.len());
+        let mut out = 0;
+        for i in 0..self.main.len() {
+            // TODO this can also be simd'd
+            out += (self.main[i] * other.main[i]).wrapping_sum();
+        }
+        for i in 0..self.rest.len() {
+            out += self.rest[i] * other.rest[i];
+        }
+        (out % 10).abs()
+    }
+}
+
 fn fft(input: &[i32], num_phases: usize) -> Vec<i32> {
     let n = input.len();
-    let matrix = iproduct!(0..n, 0..n)
-        .map(|(row, col)| PATTERN[((col + 1) / (row + 1)) % 4])
-        .collect::<Vec<_>>();
-    let mut v = input.to_vec();
+    let matrix: Vec<SimdVec> = (0..n)
+        .map(|row| {
+            (0..n).map(|col| PATTERN[((col + 1) / (row + 1)) % 4]).collect::<SimdVec>()
+        })
+        .collect();
+    let mut v: SimdVec = input.iter().map(|&x| x as i32).collect();
     for _ in 0..num_phases {
         v = (0..n).map(|i| {
-            (v.iter().zip(matrix[(i * n)..((i + 1) * n)].iter()).map(|(x, m)| x * m).sum::<i32>() % 10).abs()
+            matrix[i].last_digit_of_dot_product(&v)
         }).collect()
     }
-    v
+    Vec::from(v).iter().map(|&x| x as i32).collect()
 }
 
 #[test]
@@ -44,6 +100,7 @@ fn fft_tail(input: &[i32], num_phases: usize, offset: usize) -> Vec<i32> {
     assert!(offset >= n / 2);
     let mut cur = input[offset..].to_vec();
     for _ in 0..num_phases {
+        // TODO simd this
         let mut cum_sum = 0;
         for i in (0..(n - offset)).rev() {
             cum_sum += cur[i];

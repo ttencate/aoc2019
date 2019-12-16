@@ -11,22 +11,20 @@ const BLACK: Number = 0;
 const WHITE: Number = 1;
 
 fn paint(input: &str, hull: &mut Hull) {
-    let mut state = Program::parse(input).run();
+    let mut interrupt = Program::parse(input).run();
     let mut pos = Point::new(0, 0);
     let mut dir = 0;
-    while !state.is_halted() {
-        state = state
-            .give_input(*hull.get(&pos).unwrap_or(&BLACK))
-            .take_output(|val| {
-                hull.insert(pos, val);
-            })
-            .take_output(|val| {
-                dir = match val {
-                    0 => (dir + 4 - 1) % 4,
-                    1 => (dir + 1) % 4,
-                    _ => panic!("Invalid rotation direction {}", val),
-                };
-            });
+    while !interrupt.is_halted() {
+        interrupt = interrupt.give_input(*hull.get(&pos).unwrap_or(&BLACK)).run();
+        let (paint_color, program) = interrupt.take_output();
+        hull.insert(pos, paint_color);
+        let (rotation, program) = program.run().take_output();
+        interrupt = program.run();
+        dir = match rotation {
+            0 => (dir + 4 - 1) % 4,
+            1 => (dir + 1) % 4,
+            _ => panic!("Invalid rotation direction {}", rotation),
+        };
         match dir {
             0 => pos.y -= 1,
             1 => pos.x += 1,

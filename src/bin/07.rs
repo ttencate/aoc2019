@@ -28,31 +28,28 @@ fn part2(input: &str) -> Number {
     (5..=9)
         .permute()
         .map(|p| {
-            let mut states = p.iter().map(|&i| {
-                Some(match program.clone().run() {
-                    State::Reading(next) => next(i),
-                    _ => panic!("Expected machine to read input first"),
-                })
+            let mut programs = p.iter().map(|&i| {
+                Some(program.clone().run().give_input(i))
             }).collect::<Vec<_>>();
 
             let mut output = 0;
             let mut i = 0;
             loop {
-                let state = states[i].take().unwrap();
-                let state = match state {
-                    State::Reading(next) => next(output),
-                    State::Halted(_) => break,
+                let program = programs[i].take().unwrap();
+                let program = match program.run() {
+                    Interrupt::Reading(next) => next(output),
+                    Interrupt::Halted(_) => break,
                     _ => panic!("Expected machine to read input"),
                 };
-                let state = match state {
-                    State::Writing(val, next) => {
+                let program = match program.run() {
+                    Interrupt::Writing(val, next) => {
                         output = val;
                         next()
                     },
-                    State::Halted(_) => break,
+                    Interrupt::Halted(_) => break,
                     _ => panic!("Expected machine to write output"),
                 };
-                states[i].replace(state);
+                programs[i].replace(program);
                 i = (i + 1) % 5;
             }
             output

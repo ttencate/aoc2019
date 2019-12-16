@@ -54,51 +54,49 @@ pub struct Program {
     cur_op: Number,
 }
 
-// TODO rename to something like Interrupt
-// TODO update older problems (pre 15) to compile and work with this
-pub enum State {
+pub enum Interrupt {
     Reading(Box<dyn FnOnce(Number) -> Program>),
     Writing(Number, Box<dyn FnOnce() -> Program>),
     Halted(Program),
 }
 
-impl std::fmt::Debug for State {
+impl std::fmt::Debug for Interrupt {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         match self {
-            State::Reading(_) => write!(f, "Reading(_)"),
-            State::Writing(output, _) => write!(f, "Writing({}, _)", output),
-            State::Halted(program) => write!(f, "Halted({:?})", program),
+            Interrupt::Reading(_) => write!(f, "Reading(_)"),
+            Interrupt::Writing(output, _) => write!(f, "Writing({}, _)", output),
+            Interrupt::Halted(program) => write!(f, "Halted({:?})", program),
         }
     }
 }
 
-impl State {
+impl Interrupt {
     pub fn give_input(self, input: Number) -> Program {
         match self {
-            State::Reading(next) => next(input),
-            _ => panic!("Attempted to read input in state {:?}", self),
+            Interrupt::Reading(next) => next(input),
+            _ => panic!("Attempted to read input in interrupt state {:?}", self),
         }
     }
 
     pub fn take_output(self) -> (Number, Program) {
         match self {
-            State::Writing(output, next) => {
+            Interrupt::Writing(output, next) => {
                 (output, next())
             },
-            _ => panic!("Attempted to write output in state {:?}", self),
+            _ => panic!("Attempted to write output in interrupt state {:?}", self),
         }
     }
 
     pub fn take_program(self) -> Program {
         match self {
-            State::Halted(program) => program,
-            _ => panic!("Attempted to take program in state {:?}", self),
+            Interrupt::Halted(program) => program,
+            _ => panic!("Attempted to take program in interrupt state {:?}", self),
         }
     }
 
     pub fn is_halted(&self) -> bool {
         match self {
-            State::Halted(_) => true,
+            Interrupt::Halted(_) => true,
             _ => false,
         }
     }
@@ -132,7 +130,7 @@ impl Program {
         Self::new(Memory::parse(input))
     }
 
-    pub fn run(mut self) -> State {
+    pub fn run(mut self) -> Interrupt {
         loop {
             self.cur_ip = self.ip;
             self.cur_op = self.mem[self.ip];
@@ -149,7 +147,7 @@ impl Program {
                 7 => { self.bin_op(|a, b| if a < b { 1 } else { 0 }); },
                 8 => { self.bin_op(|a, b| if a == b { 1 } else { 0 }); },
                 9 => { self.rel_base(); },
-                99 => { return State::Halted(self); }
+                99 => { return Interrupt::Halted(self); }
                 _ => { panic!("Invalid opcode {} at address {}", opcode, self.cur_ip); }
             }
         }
@@ -157,26 +155,26 @@ impl Program {
 
     pub fn run_without_io(self) -> Program {
         match self.run() {
-            State::Reading(_) => panic!("This implementation cannot read input"),
-            State::Writing(_, _) => panic!("This implementation cannot write output"),
-            State::Halted(program) => program,
+            Interrupt::Reading(_) => panic!("This implementation cannot read input"),
+            Interrupt::Writing(_, _) => panic!("This implementation cannot write output"),
+            Interrupt::Halted(program) => program,
         }
     }
 
     pub fn run_with_io(self, input: Vec<Number>) -> ProgramWithOutput {
         let mut input_iter = input.into_iter();
         let mut output = vec![];
-        let mut state = self.run();
+        let mut interrupt = self.run();
         loop {
-            state = match state {
-                State::Reading(next) => {
+            interrupt = match interrupt {
+                Interrupt::Reading(next) => {
                     next(input_iter.next().expect("Attempted to read from empty input")).run()
                 },
-                State::Writing(n, next) => {
+                Interrupt::Writing(n, next) => {
                     output.push(n);
                     next().run()
                 },
-                State::Halted(program) => {
+                Interrupt::Halted(program) => {
                     return ProgramWithOutput { program, output };
                 },
             };
@@ -229,17 +227,17 @@ impl Program {
         self.mem[dest] = f(a, b);
     }
 
-    fn input(mut self) -> State {
+    fn input(mut self) -> Interrupt {
         let dest = self.eval_addr();
-        State::Reading(Box::new(move |val: Number| -> Program {
+        Interrupt::Reading(Box::new(move |val: Number| -> Program {
             self.mem[dest] = val;
             self
         }))
     }
 
-    fn output(mut self) -> State {
+    fn output(mut self) -> Interrupt {
         let val = self.eval_arg();
-        State::Writing(val, Box::new(|| -> Program {
+        Interrupt::Writing(val, Box::new(|| -> Program {
             self
         }))
     }

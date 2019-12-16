@@ -46,15 +46,14 @@ fn screen_to_string(screen: &Screen) -> String {
 }
 
 fn part1(input: &str) -> usize {
-    let mut state = Program::parse(input).run();
+    let mut interrupt = Program::parse(input).run();
     let mut screen = Screen::new();
-    while !state.is_halted() {
-        let mut pos = Point::default();
-        state = state.take_output(|val| pos.x = val);
-        state = state.take_output(|val| pos.y = val);
-        state = state.take_output(|val| {
-            screen.insert(pos, Tile::from_i64(val).expect("Invalid tile value"));
-        });
+    while !interrupt.is_halted() {
+        let (x, program) = interrupt.take_output();
+        let (y, program) = program.run().take_output();
+        let (val, program) = program.run().take_output();
+        interrupt = program.run();
+        screen.insert(Point::new(x, y), Tile::from_i64(val).expect("Invalid tile value"));
     }
     // println!("{}", screen_to_string(&screen));
     screen.values().filter(|&&cell| cell == Tile::Block).count()
@@ -65,37 +64,37 @@ fn part2(input: &str) -> Number {
     let mut program = Program::parse(input);
     program.mem[0] = 2;
     let mut screen = Screen::new();
-    let mut state = program.run();
+    let mut interrupt = program.run();
     let mut paddle_pos = Point::default();
     let mut ball_pos = Point::default();
     let mut score = 0;
     let mut first_render = true;
     loop {
         let mut render = false;
-        match state {
-            State::Reading(next) => {
+        match interrupt {
+            Interrupt::Reading(next) => {
                 render = true;
-                state = next((ball_pos.x - paddle_pos.x).signum());
+                interrupt = next((ball_pos.x - paddle_pos.x).signum()).run();
             },
-            State::Writing(_, _) => {
-                let mut pos = Point::default();
-                state = state.take_output(|val| pos.x = val);
-                state = state.take_output(|val| pos.y = val);
-                state = state.take_output(|val| {
-                    if pos == Point::new(-1, 0) {
-                        score = val;
-                    } else {
-                        let tile = Tile::from_i64(val).expect("Invalid tile value");
-                        screen.insert(pos, tile);
-                        if tile == Tile::HorizontalPaddle {
-                            paddle_pos = pos;
-                        } else if tile == Tile::Ball {
-                            ball_pos = pos;
-                        }
+            Interrupt::Writing(_, _) => {
+                let (x, program) = interrupt.take_output();
+                let (y, program) = program.run().take_output();
+                let (val, program) = program.run().take_output();
+                interrupt = program.run();
+                if (x, y) == (-1, 0) {
+                    score = val;
+                } else {
+                    let pos = Point::new(x, y);
+                    let tile = Tile::from_i64(val).expect("Invalid tile value");
+                    screen.insert(pos, tile);
+                    if tile == Tile::HorizontalPaddle {
+                        paddle_pos = pos;
+                    } else if tile == Tile::Ball {
+                        ball_pos = pos;
                     }
-                });
+                }
             },
-            State::Halted(_) => {
+            Interrupt::Halted(_) => {
                 render = true;
                 break;
             }

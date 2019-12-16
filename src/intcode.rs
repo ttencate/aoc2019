@@ -11,6 +11,7 @@ pub fn to_addr(n: Number) -> Addr {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Memory {
     low: Vec<Number>,
+    // TODO see if just a growing Vec is faster
     high: HashMap<usize, Number>,
 }
 
@@ -53,9 +54,11 @@ pub struct Program {
     cur_op: Number,
 }
 
+// TODO rename to something like Interrupt
+// TODO update older problems (pre 15) to compile and work with this
 pub enum State {
-    Reading(Box<dyn FnOnce(Number) -> State>),
-    Writing(Number, Box<dyn FnOnce() -> State>),
+    Reading(Box<dyn FnOnce(Number) -> Program>),
+    Writing(Number, Box<dyn FnOnce() -> Program>),
     Halted(Program),
 }
 
@@ -70,18 +73,17 @@ impl std::fmt::Debug for State {
 }
 
 impl State {
-    pub fn give_input(self, input: Number) -> State {
+    pub fn give_input(self, input: Number) -> Program {
         match self {
             State::Reading(next) => next(input),
             _ => panic!("Attempted to read input in state {:?}", self),
         }
     }
 
-    pub fn take_output<F: FnOnce(Number) -> ()>(self, func: F) -> State {
+    pub fn take_output(self) -> (Number, Program) {
         match self {
             State::Writing(output, next) => {
-                func(output);
-                next()
+                (output, next())
             },
             _ => panic!("Attempted to write output in state {:?}", self),
         }
@@ -168,11 +170,11 @@ impl Program {
         loop {
             state = match state {
                 State::Reading(next) => {
-                    next(input_iter.next().expect("Attempted to read from empty input"))
+                    next(input_iter.next().expect("Attempted to read from empty input")).run()
                 },
                 State::Writing(n, next) => {
                     output.push(n);
-                    next()
+                    next().run()
                 },
                 State::Halted(program) => {
                     return ProgramWithOutput { program, output };
@@ -229,16 +231,16 @@ impl Program {
 
     fn input(mut self) -> State {
         let dest = self.eval_addr();
-        State::Reading(Box::new(move |val: Number| -> State {
+        State::Reading(Box::new(move |val: Number| -> Program {
             self.mem[dest] = val;
-            self.run()
+            self
         }))
     }
 
     fn output(mut self) -> State {
         let val = self.eval_arg();
-        State::Writing(val, Box::new(|| -> State {
-            self.run()
+        State::Writing(val, Box::new(|| -> Program {
+            self
         }))
     }
 

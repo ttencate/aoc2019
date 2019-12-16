@@ -168,6 +168,9 @@ fn test_part1() {
 fn max_fuel_from_ore(input_ore: usize, ordered_reactions: &Vec<Reaction>) -> usize {
     let mut lower_fuel = input_ore / ore_needed_for_fuel(1, ordered_reactions);
     let mut upper_fuel = lower_fuel * 2;
+    if upper_fuel == 0 {
+        upper_fuel = 1;
+    }
     while ore_needed_for_fuel(upper_fuel, ordered_reactions) <= input_ore {
         upper_fuel *= 2;
     }

@@ -2,7 +2,8 @@ use aoc::intcode::*;
 use euclid;
 
 struct Grid;
-type Point = euclid::Point2D<usize, Grid>;
+type Point = euclid::Point2D<i64, Grid>;
+type Vector = euclid::Vector2D<i64, Grid>;
 
 #[derive(Debug, Copy, Clone)]
 enum Direction {
@@ -12,9 +13,10 @@ enum Direction {
     West,
 }
 
+use Direction::*;
+
 impl Direction {
     fn parse(c: u8) -> Option<Direction> {
-        use Direction::*;
         match c {
             b'^' => Some(North),
             b'>' => Some(East),
@@ -22,6 +24,26 @@ impl Direction {
             b'<' => Some(West),
             _ => None
         }
+    }
+
+    fn to_vector(&self) -> Vector {
+        match self {
+            North => Vector::new(0, -1),
+            East => Vector::new(1, 0),
+            South => Vector::new(0, 1),
+            West => Vector::new(-1, 0),
+        }
+    }
+}
+
+impl std::fmt::Display for Direction {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            North => '^',
+            East => '>',
+            South => 'v',
+            West => '<',
+        })
     }
 }
 
@@ -32,52 +54,73 @@ struct State {
     dir: Direction,
 }
 
+impl std::fmt::Display for State {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        for y in 0..self.ny() {
+            for x in 0..self.nx() {
+                let pos = Point::new(x, y);
+                if pos == self.pos {
+                    write!(f, "{}", self.dir)?;
+                } else {
+                    write!(f, "{}", self.cell(pos) as char)?;
+                }
+            }
+            write!(f, "\n")?;
+        }
+        Ok(())
+    }
+}
+
 impl State {
     fn parse(ascii: &str) -> Self {
         let mut pos = Point::default();
-        let mut dir = Direction::North;
+        let mut dir = North;
         let cells = ascii.trim().lines()
             .enumerate()
-            .map(|(row, chars)| {
-                let mut chars = chars.trim().as_bytes().to_vec();
-                for col in 0..chars.len() {
-                    if let Some(d) = Direction::parse(chars[col]) {
-                        pos = Point::new(col, row);
+            .map(|(y, line)| {
+                let mut row = line.trim().as_bytes().to_vec();
+                for x in 0..row.len() {
+                    if let Some(d) = Direction::parse(row[x]) {
+                        pos = Point::new(x as i64, y as i64);
                         dir = d;
-                        chars[col] = b'#';
+                        row[x] = b'#';
                     }
                 }
-                chars
+                row
             })
             .collect::<Vec<_>>();
         State { cells, pos, dir }
     }
 
-    fn cell(&self, row: usize, col: usize) -> u8 {
-        self.cells[row][col]
+    fn cell(&self, pos: Point) -> u8 {
+        if pos.x < 0 || pos.x >= self.nx() || pos.y < 0 || pos.y >= self.ny() {
+            b'.'
+        } else {
+            self.cells[pos.y as usize][pos.x as usize]
+        }
     }
 
-    fn num_rows(&self) -> usize {
-        self.cells.len()
+    fn nx(&self) -> i64 {
+        self.cells[0].len() as i64
     }
 
-    fn num_cols(&self) -> usize {
-        self.cells[0].len()
+    fn ny(&self) -> i64 {
+        self.cells.len() as i64
     }
 }
 
-fn alignment_parameters_sum(ascii: &str) -> usize {
-    let state = State::parse(ascii);
-
+fn alignment_parameters_sum(state: &State) -> i64 {
     let mut sum = 0;
-    for row in 1..(state.num_rows() - 1) {
-        for col in 1..(state.num_cols() - 1) {
-            if state.cell(row, col) == b'#' &&
-                state.cell(row - 1, col) == b'#' &&
-                state.cell(row + 1, col) == b'#' &&
-                state.cell(row, col - 1) == b'#' &&
-                state.cell(row, col + 1) == b'#' {
-                sum += row * col;
+    for y in 1..(state.ny() - 1) {
+        for x in 1..(state.nx() - 1) {
+            let pos = Point::new(x, y);
+            if state.cell(pos) == b'#' &&
+                state.cell(pos + North.to_vector()) == b'#' &&
+                state.cell(pos + East.to_vector()) == b'#' &&
+                state.cell(pos + South.to_vector()) == b'#' &&
+                state.cell(pos + West.to_vector()) == b'#'
+            {
+                sum += y * x;
             }
         }
     }
@@ -87,20 +130,23 @@ fn alignment_parameters_sum(ascii: &str) -> usize {
 #[test]
 fn test_alignment_parameters_sum() {
     assert_eq!(
-        alignment_parameters_sum("..#..........
-                                  ..#..........
-                                  #######...###
-                                  #.#...#...#.#
-                                  #############
-                                  ..#...#...#..
-                                  ..#####...^.."),
+        alignment_parameters_sum(&State::parse(
+            "..#..........
+             ..#..........
+             #######...###
+             #.#...#...#.#
+             #############
+             ..#...#...#..
+             ..#####...^..")),
         76);
 }
 
-fn part1(input: &str) -> usize {
+fn part1(input: &str) -> i64 {
     let output = Program::parse(input).run_with_io(vec![]).output;
     let ascii = String::from_utf8(output.iter().map(|&val| val as u8).collect()).unwrap();
-    alignment_parameters_sum(&ascii)
+    let state = State::parse(&ascii);
+    // println!("{}", state);
+    alignment_parameters_sum(&state)
 }
 
 fn part2(_input: &str) -> String {

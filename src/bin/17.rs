@@ -257,35 +257,34 @@ fn path_to_functions(path: &[Instruction]) -> String {
     for max_func_len in 0..path.len() {
         let mut func_lens = vec![1; num_funcs];
         while func_lens[func_lens.len() - 1] <= max_func_len {
-            // If none is max_func_len, we already checked this combination in the previous
-            // iteration.
-            // TODO: iterate smarter, not harder (maybe just store in vec, then sort?)
+            // If no func_len is equal to max_func_len, we already checked this combination in the
+            // previous iteration.
+            // TODO: iterate smarter, not harder
             if func_lens.iter().any(|&len| len == max_func_len) {
                 let mut funcs: Vec<&[u8]> = Vec::with_capacity(num_funcs);
                 main.clear();
                 let mut remaining = path;
                 while !remaining.is_empty() {
-                    let mut matched = false;
                     // Find a func that matches the path prefix.
-                    for (i, func) in funcs.iter().enumerate() {
-                        if remaining.starts_with(func) {
-                            if !main.is_empty() {
-                                main.push(b',');
-                            }
-                            main.push(b'A' + i as u8);
-                            remaining = &remaining[func.len()..];
-                            matched = true;
-                            break;
+                    let matching_func = funcs.iter().enumerate()
+                        .find(|(_, func)| remaining.starts_with(func));
+                    if let Some((idx, func)) = matching_func {
+                        // Found one! Use it.
+                        if !main.is_empty() {
+                            main.push(b',');
                         }
-                    }
-                    if !matched {
-                        // No matching func found. Can we use a new one?
+                        main.push(b'A' + idx as u8);
+                        remaining = &remaining[func.len()..];
+                    } else {
+                        // No matching func found. Do we still have one to spare, and is it short
+                        // enough to not exceed the remaining path length?
                         let next_func_index = funcs.len();
                         if next_func_index < num_funcs && func_lens[next_func_index] <= remaining.len() {
                             // Start the next func here with the prescribed length.
                             funcs.push(&remaining[0..func_lens[next_func_index]]);
                         } else {
-                            // Hopeless. Abort.
+                            // We used up all our functions and have unmatchable path left. Give
+                            // up.
                             break;
                         }
                     }

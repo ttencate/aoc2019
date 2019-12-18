@@ -267,16 +267,15 @@ impl AStarHeuristic
         where N: ArrayLength<Node> + std::cmp::Eq
     {
         let missing_keys = self.all_keys - keys;
-        let mut distance_to_farthest_missing_key = 0;
-        for node in nodes.iter() {
-            let dists = &self.distances_to_keys.get(node).unwrap();
-            for missing_key in missing_keys.iter() {
-                if let Some(steps) = dists.get(&missing_key) {
-                    distance_to_farthest_missing_key = distance_to_farthest_missing_key.max(*steps);
-                }
-            }
-        }
-        distance_to_farthest_missing_key
+        nodes.iter()
+            .map(|node| {
+                let dists = &self.distances_to_keys.get(node).unwrap();
+                missing_keys.iter()
+                    .filter_map(|missing_key| dists.get(&missing_key))
+                    .max()
+                    .unwrap_or(&0)
+            })
+            .sum()
     }
 }
 

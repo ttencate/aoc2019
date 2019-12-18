@@ -1,25 +1,28 @@
 use euclid;
-use std::collections::{HashSet, VecDeque};
+use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
+use std::cmp::Reverse;
 
 struct Grid;
 type Point = euclid::Point2D<i32, Grid>;
 type Vector = euclid::Vector2D<i32, Grid>;
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 struct KeySet(usize);
 
 impl KeySet {
-    fn from_char(c: u8) -> Self {
+    fn opens_door(self, c: u8) -> bool {
+        assert!(c.is_ascii_uppercase());
+        self.0 & (1 << ((c - b'A') as usize)) != 0
+    }
+}
+
+impl From<u8> for KeySet {
+    fn from(c: u8) -> Self {
         if c.is_ascii_lowercase() {
             KeySet(1 << ((c - b'a') as usize))
         } else {
             KeySet::default()
         }
-    }
-
-    fn opens_door(self, c: u8) -> bool {
-        assert!(c.is_ascii_uppercase());
-        self.0 & (1 << ((c - b'A') as usize)) != 0
     }
 }
 
@@ -32,39 +35,27 @@ impl std::ops::Add<KeySet> for KeySet {
 
 struct Map {
     cells: Vec<Vec<u8>>,
-    start_pos: Point,
     all_keys: KeySet,
 }
 
 impl Map {
     fn parse(input: &str) -> Self {
         let cells = input.lines().map(|line| line.trim().as_bytes().to_vec()).collect::<Vec<_>>();
-        let mut start_pos = Point::default();
         let mut all_keys = KeySet::default();
-        for (y, row) in cells.iter().enumerate() {
-            for (x, c) in row.iter().enumerate() {
-                match c {
-                    b'@' => { start_pos = Point::new(x as i32, y as i32); },
-                    &c if c.is_ascii_lowercase() => { all_keys = all_keys + KeySet::from_char(c); },
-                    _ => {},
-                }
+        for row in cells.iter() {
+            for &c in row.iter() {
+                all_keys = all_keys + KeySet::from(c);
             }
         }
-        Map { cells, start_pos, all_keys }
+        Map { cells, all_keys }
     }
 
-    fn is_passable(&self, state: &State) -> bool {
-        match self[state.pos] {
-            b'.' | b'@' => true,
-            c if c.is_ascii_lowercase() => true,
-            b'#' => false,
-            c if c.is_ascii_uppercase() => state.keys.opens_door(c),
-            c => panic!("Unknown map character {}", c),
-        }
+    fn nx(&self) -> i32 {
+        self.cells[0].len() as i32
     }
 
-    fn key_at(&self, pos: Point) -> KeySet {
-        KeySet::from_char(self[pos])
+    fn ny(&self) -> i32 {
+        self.cells.len() as i32
     }
 }
 
@@ -75,44 +66,110 @@ impl std::ops::Index<Point> for Map {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+enum Node {
+    Start,
+    Key(u8),
+    Door(u8),
+}
+
+impl From<u8> for Node {
+    fn from(c: u8) -> Self {
+        match c {
+            b'@' => Node::Start,
+            c if c.is_ascii_lowercase() => Node::Key(c),
+            c if c.is_ascii_uppercase() => Node::Door(c),
+            _ => panic!("Unknown node character {}", c as char),
+        }
+    }
+}
+
+impl std::fmt::Debug for Node {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            Node::Start => b'@',
+            Node::Key(key) => *key,
+            Node::Door(door) => *door,
+        } as char)
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 struct State {
-    pos: Point,
+    node: Node,
     keys: KeySet,
-    steps: usize,
 }
 
 fn part1(input: &str) -> usize {
     let map = Map::parse(input);
-    let mut queue = VecDeque::new();
-    queue.push_back(State {
-        pos: map.start_pos,
+
+    let mut distances: HashMap<Node, HashMap<Node, usize>> = HashMap::new();
+    for y in 0..map.ny() {
+        for x in 0..map.nx() {
+            let start_point = Point::new(x, y);
+            let start_c = map[start_point];
+            if start_c == b'@' || start_c.is_ascii_alphabetic() {
+                let mut queue: VecDeque<(Point, usize)> = VecDeque::new();
+                queue.push_back((start_point, 0));
+                let mut visited = HashSet::new();
+                let mut dists: HashMap<Node, usize> = HashMap::new();
+                while let Some((point, dist)) = queue.pop_front() {
+                    if !visited.insert(point) {
+                        continue;
+                    }
+                    let c = map[point];
+                    if point != start_point && c.is_ascii_alphabetic() {
+                        dists.insert(Node::from(c), dist);
+                    } else {
+                        for &step in &[
+                            Vector::new(-1, 0),
+                            Vector::new(1, 0),
+                            Vector::new(0, -1),
+                            Vector::new(0, 1),
+                        ] {
+                            let next = point + step;
+                            if map[next] != b'#' {
+                                queue.push_back((next, dist + 1));
+                            }
+                        }
+                    }
+                }
+                distances.insert(Node::from(start_c), dists);
+            }
+        }
+    }
+
+    let mut queue: BinaryHeap<Reverse<(usize, State)>> = BinaryHeap::new();
+    queue.push(Reverse((0, State {
+        node: Node::Start,
         keys: KeySet::default(),
-        steps: 0,
-    });
+    })));
     let mut visited = HashSet::new();
-    while let Some(cur) = queue.pop_front() {
+    while let Some(Reverse((steps, cur))) = queue.pop() {
         if !visited.insert(cur) {
             continue;
         }
         if cur.keys == map.all_keys {
-            return cur.steps;
+            return steps;
         }
-        for &step in &[
-            Vector::new(-1, 0),
-            Vector::new(1, 0),
-            Vector::new(0, -1),
-            Vector::new(0, 1),
-        ] {
-            let next_pos = cur.pos + step;
-            let next = State {
-                pos: next_pos,
-                keys: cur.keys + map.key_at(next_pos),
-                steps: cur.steps + 1,
+        let dists = distances.get(&cur.node).unwrap();
+        for (&next_node, dist) in dists {
+            let mut next_state = State {
+                node: next_node,
+                keys: cur.keys,
             };
-            if map.is_passable(&next) {
-                queue.push_back(next);
+            match next_node {
+                Node::Start => panic!("Start node should only have out edges"),
+                Node::Key(key) => {
+                    next_state.keys = next_state.keys + KeySet::from(key);
+                },
+                Node::Door(c) => {
+                    if !cur.keys.opens_door(c) {
+                        continue;
+                    }
+                },
             }
+            queue.push(Reverse((steps + dist, next_state)));
         }
     }
     panic!("No route found that collects all keys")

@@ -32,36 +32,26 @@ impl std::ops::Add<KeySet> for KeySet {
     }
 }
 
-struct Map {
-    cells: Vec<Vec<u8>>,
-    all_keys: KeySet,
-}
+struct Map(Vec<Vec<u8>>);
 
 impl Map {
     fn parse(input: &str) -> Self {
-        let cells = input.lines().map(|line| line.trim().as_bytes().to_vec()).collect::<Vec<_>>();
-        let mut all_keys = KeySet::default();
-        for row in cells.iter() {
-            for &c in row.iter() {
-                all_keys = all_keys + KeySet::from(c);
-            }
-        }
-        Map { cells, all_keys }
+        Map(input.lines().map(|line| line.trim().as_bytes().to_vec()).collect())
     }
 
     fn nx(&self) -> i32 {
-        self.cells[0].len() as i32
+        self.0[0].len() as i32
     }
 
     fn ny(&self) -> i32 {
-        self.cells.len() as i32
+        self.0.len() as i32
     }
 }
 
 impl std::ops::Index<Point> for Map {
     type Output = u8;
     fn index(&self, pos: Point) -> &u8 {
-        &self.cells[pos.y as usize][pos.x as usize]
+        &self.0[pos.y as usize][pos.x as usize]
     }
 }
 
@@ -151,6 +141,12 @@ fn part1(input: &str) -> usize {
         }
     }
 
+    let all_keys = distances.keys()
+        .filter_map(|&node| {
+            if let Node::Key(c) = node { Some(KeySet::from(c)) } else { None }
+        })
+        .fold(KeySet::default(), |a, b| a + b);
+
     let mut queue = BinaryHeap::new();
     queue.push(State {
         node: Node::Start,
@@ -162,7 +158,7 @@ fn part1(input: &str) -> usize {
         if !visited.insert((cur.node, cur.keys)) {
             continue;
         }
-        if cur.keys == map.all_keys {
+        if cur.keys == all_keys {
             return cur.steps;
         }
         let dists = distances.get(&cur.node).unwrap();

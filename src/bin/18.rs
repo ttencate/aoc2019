@@ -1,11 +1,13 @@
 use euclid;
+use generic_array::{arr, ArrayLength, GenericArray};
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
+use std::convert::TryFrom;
 
 struct Grid;
 type Point = euclid::Point2D<i32, Grid>;
 type Vector = euclid::Vector2D<i32, Grid>;
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Default, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 struct KeySet(usize);
 
 impl KeySet {
@@ -32,6 +34,29 @@ impl std::ops::Add<KeySet> for KeySet {
     }
 }
 
+impl std::iter::Sum for KeySet {
+    fn sum<I: IntoIterator<Item = KeySet>>(iter: I) -> KeySet {
+        iter.into_iter().fold(KeySet::default(), |a, b| a + b)
+    }
+}
+
+impl std::fmt::Debug for KeySet {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut bit = 1;
+        let mut c = b'a';
+        write!(f, "[")?;
+        while bit != 0 {
+            if self.0 & bit != 0 {
+                write!(f, "{}", c as char)?;
+            }
+            bit <<= 1;
+            c += 1;
+        }
+        write!(f, "]")?;
+        Ok(())
+    }
+}
+
 struct Map(Vec<Vec<u8>>);
 
 impl Map {
@@ -55,62 +80,76 @@ impl std::ops::Index<Point> for Map {
     }
 }
 
+impl std::ops::IndexMut<Point> for Map {
+    fn index_mut(&mut self, pos: Point) -> &mut u8 {
+        &mut self.0[pos.y as usize][pos.x as usize]
+    }
+}
+
+impl std::fmt::Display for Map {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        for row in &self.0 {
+            write!(f, "{}\n", String::from_utf8(row.to_vec()).unwrap())?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 enum Node {
-    Start,
+    Start(usize),
     Key(u8),
     Door(u8),
 }
 
-impl From<u8> for Node {
-    fn from(c: u8) -> Self {
+impl std::convert::TryFrom<u8> for Node {
+    type Error = ();
+    fn try_from(c: u8) -> Result<Self, Self::Error> {
         match c {
-            b'@' => Node::Start,
-            c if c.is_ascii_lowercase() => Node::Key(c),
-            c if c.is_ascii_uppercase() => Node::Door(c),
-            _ => panic!("Unknown node character {}", c as char),
+            b'@' => Ok(Node::Start(0)),
+            c if c.is_ascii_digit() => Ok(Node::Start((c - b'0').into())),
+            c if c.is_ascii_lowercase() => Ok(Node::Key(c)),
+            c if c.is_ascii_uppercase() => Ok(Node::Door(c)),
+            _ => Err(()),
         }
     }
 }
 
 impl std::fmt::Debug for Node {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            Node::Start => b'@',
-            Node::Key(key) => *key,
-            Node::Door(door) => *door,
+        write!(f, "{}", match *self {
+            Node::Start(r) => b'0' + r as u8,
+            Node::Key(key) => key,
+            Node::Door(door) => door,
         } as char)
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-struct State {
-    node: Node,
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct State<N: ArrayLength<Node>> {
+    nodes: GenericArray<Node, N>,
     keys: KeySet,
     steps: usize,
 }
 
-impl std::cmp::PartialOrd for State {
-    fn partial_cmp(&self, other: &State) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
+impl<N: ArrayLength<Node> + std::cmp::PartialEq> std::cmp::PartialOrd for State<N> {
+    fn partial_cmp(&self, other: &State<N>) -> Option<std::cmp::Ordering> {
+        Some(other.steps.cmp(&self.steps))
     }
 }
 
-impl std::cmp::Ord for State {
-    fn cmp(&self, other: &State) -> std::cmp::Ordering {
+impl<N: ArrayLength<Node> + std::cmp::Eq> std::cmp::Ord for State<N> {
+    fn cmp(&self, other: &State<N>) -> std::cmp::Ordering {
         other.steps.cmp(&self.steps)
     }
 }
 
-fn part1(input: &str) -> usize {
-    let map = Map::parse(input);
-
+fn compute_distances(map: &Map) -> HashMap<Node, HashMap<Node, usize>> {
     let mut distances: HashMap<Node, HashMap<Node, usize>> = HashMap::new();
     for y in 0..map.ny() {
         for x in 0..map.nx() {
             let start_point = Point::new(x, y);
-            let start_c = map[start_point];
-            if start_c == b'@' || start_c.is_ascii_alphabetic() {
+            if let Ok(start_node) = Node::try_from(map[start_point]) {
                 let mut queue: VecDeque<(Point, usize)> = VecDeque::new();
                 queue.push_back((start_point, 0));
                 let mut visited = HashSet::new();
@@ -121,7 +160,7 @@ fn part1(input: &str) -> usize {
                     }
                     let c = map[point];
                     if point != start_point && c.is_ascii_alphabetic() {
-                        dists.insert(Node::from(c), dist);
+                        dists.insert(Node::try_from(c).unwrap(), dist);
                     } else {
                         for &step in &[
                             Vector::new(-1, 0),
@@ -136,53 +175,68 @@ fn part1(input: &str) -> usize {
                         }
                     }
                 }
-                distances.insert(Node::from(start_c), dists);
+                distances.insert(start_node, dists);
             }
         }
     }
+    distances
+}
 
+fn find_path_steps<N>(distances: &HashMap<Node, HashMap<Node, usize>>, start_nodes: GenericArray<Node, N>) -> usize
+    where N: ArrayLength<Node> + std::cmp::Eq + std::fmt::Debug
+{
     let all_keys = distances.keys()
         .filter_map(|&node| {
             if let Node::Key(c) = node { Some(KeySet::from(c)) } else { None }
         })
-        .fold(KeySet::default(), |a, b| a + b);
+        .sum();
 
     let mut queue = BinaryHeap::new();
     queue.push(State {
-        node: Node::Start,
+        nodes: start_nodes,
         keys: KeySet::default(),
         steps: 0,
     });
     let mut visited = HashSet::new();
     while let Some(cur) = queue.pop() {
-        if !visited.insert((cur.node, cur.keys)) {
+        if !visited.insert((cur.nodes.clone(), cur.keys)) {
             continue;
         }
         if cur.keys == all_keys {
             return cur.steps;
         }
-        let dists = distances.get(&cur.node).unwrap();
-        for (&next_node, steps) in dists {
-            let mut next_state = State {
-                node: next_node,
-                keys: cur.keys,
-                steps: cur.steps + steps,
-            };
-            match next_node {
-                Node::Start => panic!("Start node should only have out edges"),
-                Node::Key(key) => {
-                    next_state.keys = next_state.keys + KeySet::from(key);
-                },
-                Node::Door(c) => {
-                    if !cur.keys.opens_door(c) {
-                        continue;
-                    }
-                },
+        for i in 0..cur.nodes.len() {
+            let dists = distances.get(&cur.nodes[i]).unwrap();
+            for (&next_node, steps) in dists {
+                let mut next_nodes = cur.nodes.clone();
+                next_nodes[i] = next_node;
+                let mut next_state = State {
+                    nodes: next_nodes,
+                    keys: cur.keys,
+                    steps: cur.steps + steps,
+                };
+                match next_node {
+                    Node::Start(_) => panic!("Start nodes should only have out edges"),
+                    Node::Key(key) => {
+                        next_state.keys = next_state.keys + KeySet::from(key);
+                    },
+                    Node::Door(c) => {
+                        if !cur.keys.opens_door(c) {
+                            continue;
+                        }
+                    },
+                }
+                queue.push(next_state);
             }
-            queue.push(next_state);
         }
     }
     panic!("No route found that collects all keys")
+}
+
+fn part1(input: &str) -> usize {
+    let map = Map::parse(input);
+    let distances = compute_distances(&map);
+    find_path_steps(&distances, arr![Node; Node::Start(0)])
 }
 
 #[test]
@@ -227,8 +281,74 @@ fn test_part1() {
         81);
 }
 
-fn part2(_input: &str) -> String {
-    "TODO".to_string()
+fn patch_map(map: &mut Map) {
+    for y in 0..map.ny() {
+        for x in 0..map.nx() {
+            if map[Point::new(x as i32, y as i32)] == b'@' {
+                for dy in -1..=1 {
+                    for dx in -1..=1 {
+                        map[Point::new(x as i32 + dx, y as i32 + dy)] = match (dx, dy) {
+                            (-1, -1) => b'0',
+                            (1, -1) => b'1',
+                            (-1, 1) => b'2',
+                            (1, 1) => b'3',
+                            _ => b'#',
+                        };
+                    }
+                }
+                break;
+            }
+        }
+    }
+}
+
+fn part2(input: &str) -> usize {
+    let mut map = Map::parse(input);
+    patch_map(&mut map);
+    let distances = compute_distances(&map);
+    find_path_steps(&distances, arr![Node; Node::Start(0), Node::Start(1), Node::Start(2), Node::Start(3)])
+}
+
+#[test]
+fn test_part2() {
+    assert_eq!(
+        part2("#######
+               #a.#Cd#
+               ##...##
+               ##.@.##
+               ##...##
+               #cB#Ab#
+               #######"),
+        8);
+    assert_eq!(
+        part2("###############
+               #d.ABC.#.....a#
+               ######...######
+               ######.@.######
+               ######...######
+               #b.....#.....c#
+               ###############"),
+        24);
+    assert_eq!(
+        part2("#############
+               #DcBa.#.GhKl#
+               #.###...#I###
+               #e#d#.@.#j#k#
+               ###C#...###J#
+               #fEbA.#.FgHi#
+               #############"),
+        32);
+    assert_eq!(
+        part2("#############
+               #g#f.D#..h#l#
+               #F###e#E###.#
+               #dCba...BcIJ#
+               #####.@.#####
+               #nK.L...G...#
+               #M###N#H###.#
+               #o#m..#i#jk.#
+               #############"),
+        72);
 }
 
 fn main() {
@@ -237,5 +357,5 @@ fn main() {
 
 #[test]
 fn test_answers() {
-    // aoc::test(part1, 4270, part2, "TODO".to_string());
+    aoc::test(part1, 4270, part2, 1982);
 }

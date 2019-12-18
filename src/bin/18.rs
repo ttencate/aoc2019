@@ -2,6 +2,7 @@ use euclid;
 use generic_array::{arr, ArrayLength, GenericArray};
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 use std::convert::TryFrom;
+use std::cmp::Reverse;
 
 struct Grid;
 type Point = euclid::Point2D<i32, Grid>;
@@ -14,6 +15,10 @@ impl KeySet {
     fn opens_door(self, c: u8) -> bool {
         assert!(c.is_ascii_uppercase());
         self.0 & (1 << ((c - b'A') as usize)) != 0
+    }
+
+    fn iter(self) -> KeySetIterator {
+        KeySetIterator { keys: self.0, bit: 1 }
     }
 }
 
@@ -34,10 +39,48 @@ impl std::ops::Add<KeySet> for KeySet {
     }
 }
 
+impl std::ops::Sub<KeySet> for KeySet {
+    type Output = KeySet;
+    fn sub(self, other: KeySet) -> KeySet {
+        KeySet(self.0 & !other.0)
+    }
+}
+
 impl std::iter::Sum for KeySet {
     fn sum<I: IntoIterator<Item = KeySet>>(iter: I) -> KeySet {
         iter.into_iter().fold(KeySet::default(), |a, b| a + b)
     }
+}
+
+struct KeySetIterator {
+    keys: usize,
+    bit: usize,
+}
+
+impl Iterator for KeySetIterator {
+    type Item = KeySet;
+    fn next(&mut self) -> Option<KeySet> {
+        while self.bit <= self.keys && self.keys & self.bit == 0 {
+            self.bit <<= 1;
+        }
+        if self.bit > self.keys {
+            return None;
+        }
+        let next = KeySet(self.bit);
+        self.bit <<= 1;
+        Some(next)
+    }
+}
+
+#[test]
+fn test_keyset_iter() {
+    assert_eq!(KeySet::default().iter().collect::<Vec<_>>(), vec![]);
+    assert_eq!(KeySet::from(b'a').iter().collect::<Vec<_>>(), vec![KeySet::from(b'a')]);
+    assert_eq!(KeySet::from(b'b').iter().collect::<Vec<_>>(), vec![KeySet::from(b'b')]);
+    assert_eq!(KeySet::from(b'z').iter().collect::<Vec<_>>(), vec![KeySet::from(b'z')]);
+    assert_eq!(KeySet(3).iter().collect::<Vec<_>>(), vec![KeySet::from(b'a'), KeySet::from(b'b')]);
+    assert_eq!(KeySet(6).iter().collect::<Vec<_>>(), vec![KeySet::from(b'b'), KeySet::from(b'c')]);
+    assert_eq!(KeySet(10).iter().collect::<Vec<_>>(), vec![KeySet::from(b'b'), KeySet::from(b'd')]);
 }
 
 impl std::fmt::Debug for KeySet {
@@ -130,17 +173,18 @@ struct State<N: ArrayLength<Node>> {
     nodes: GenericArray<Node, N>,
     keys: KeySet,
     steps: usize,
+    heuristic: usize,
 }
 
-impl<N: ArrayLength<Node> + std::cmp::PartialEq> std::cmp::PartialOrd for State<N> {
+impl<N: ArrayLength<Node> + std::cmp::PartialEq + std::cmp::Eq> std::cmp::PartialOrd for State<N> {
     fn partial_cmp(&self, other: &State<N>) -> Option<std::cmp::Ordering> {
-        Some(other.steps.cmp(&self.steps))
+        Some(self.cmp(other))
     }
 }
 
 impl<N: ArrayLength<Node> + std::cmp::Eq> std::cmp::Ord for State<N> {
     fn cmp(&self, other: &State<N>) -> std::cmp::Ordering {
-        other.steps.cmp(&self.steps)
+        (other.steps + other.heuristic).cmp(&(self.steps + self.heuristic))
     }
 }
 
@@ -182,6 +226,60 @@ fn compute_distances(map: &Map) -> HashMap<Node, HashMap<Node, usize>> {
     distances
 }
 
+fn compute_distances_to_keys(distances: &HashMap<Node, HashMap<Node, usize>>) -> HashMap<Node, HashMap<KeySet, usize>> {
+    distances.keys()
+        .map(|&start_node| {
+            let mut dists = HashMap::new();
+            let mut visited = HashSet::new();
+            let mut queue = BinaryHeap::new();
+            queue.push(Reverse((0, start_node)));
+            while let Some(Reverse((cur_steps, cur_node))) = queue.pop() {
+                if !visited.insert(cur_node) {
+                    continue;
+                }
+                if let Node::Key(c) = cur_node {
+                    dists.insert(KeySet::from(c), cur_steps);
+                }
+                for (next_node, steps) in distances.get(&cur_node).unwrap() {
+                    queue.push(Reverse((cur_steps + steps, *next_node)));
+                }
+            }
+            (start_node, dists)
+        })
+        .collect()
+}
+
+struct AStarHeuristic {
+    distances_to_keys: HashMap<Node, HashMap<KeySet, usize>>,
+    all_keys: KeySet,
+}
+
+impl AStarHeuristic
+{
+    fn new(distances: &HashMap<Node, HashMap<Node, usize>>, all_keys: KeySet) -> Self {
+        AStarHeuristic {
+            distances_to_keys: compute_distances_to_keys(distances),
+            all_keys,
+        }
+    }
+
+    fn calc<N>(&self, nodes: &GenericArray<Node, N>, keys: KeySet) -> usize
+        where N: ArrayLength<Node> + std::cmp::Eq
+    {
+        let missing_keys = self.all_keys - keys;
+        let mut distance_to_farthest_missing_key = 0;
+        for node in nodes.iter() {
+            let dists = &self.distances_to_keys.get(node).unwrap();
+            for missing_key in missing_keys.iter() {
+                if let Some(steps) = dists.get(&missing_key) {
+                    distance_to_farthest_missing_key = distance_to_farthest_missing_key.max(*steps);
+                }
+            }
+        }
+        distance_to_farthest_missing_key
+    }
+}
+
 fn find_path_steps<N>(distances: &HashMap<Node, HashMap<Node, usize>>, start_nodes: GenericArray<Node, N>) -> usize
     where N: ArrayLength<Node> + std::cmp::Eq + std::fmt::Debug
 {
@@ -191,11 +289,16 @@ fn find_path_steps<N>(distances: &HashMap<Node, HashMap<Node, usize>>, start_nod
         })
         .sum();
 
+    let heuristic = AStarHeuristic::new(distances, all_keys);
+
     let mut queue = BinaryHeap::new();
+    let start_keys = KeySet::default();
+    let start_heuristic = heuristic.calc(&start_nodes, start_keys);
     queue.push(State {
         nodes: start_nodes,
-        keys: KeySet::default(),
+        keys: start_keys,
         steps: 0,
+        heuristic: start_heuristic,
     });
     let mut visited = HashSet::new();
     while let Some(cur) = queue.pop() {
@@ -208,25 +311,24 @@ fn find_path_steps<N>(distances: &HashMap<Node, HashMap<Node, usize>>, start_nod
         for i in 0..cur.nodes.len() {
             let dists = distances.get(&cur.nodes[i]).unwrap();
             for (&next_node, steps) in dists {
+                if let Node::Door(c) = next_node {
+                    if !cur.keys.opens_door(c) {
+                        continue;
+                    }
+                }
                 let mut next_nodes = cur.nodes.clone();
                 next_nodes[i] = next_node;
-                let mut next_state = State {
-                    nodes: next_nodes,
-                    keys: cur.keys,
-                    steps: cur.steps + steps,
-                };
-                match next_node {
-                    Node::Start(_) => panic!("Start nodes should only have out edges"),
-                    Node::Key(key) => {
-                        next_state.keys = next_state.keys + KeySet::from(key);
-                    },
-                    Node::Door(c) => {
-                        if !cur.keys.opens_door(c) {
-                            continue;
-                        }
-                    },
+                let mut next_keys = cur.keys;
+                if let Node::Key(c) = next_node {
+                    next_keys = next_keys + KeySet::from(c);
                 }
-                queue.push(next_state);
+                let next_heuristic = heuristic.calc(&next_nodes, next_keys);
+                queue.push(State {
+                    nodes: next_nodes,
+                    keys: next_keys,
+                    steps: cur.steps + steps,
+                    heuristic: next_heuristic,
+                });
             }
         }
     }

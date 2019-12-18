@@ -1,6 +1,5 @@
 use euclid;
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
-use std::cmp::Reverse;
 
 struct Grid;
 type Point = euclid::Point2D<i32, Grid>;
@@ -94,10 +93,23 @@ impl std::fmt::Debug for Node {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 struct State {
     node: Node,
     keys: KeySet,
+    steps: usize,
+}
+
+impl std::cmp::PartialOrd for State {
+    fn partial_cmp(&self, other: &State) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl std::cmp::Ord for State {
+    fn cmp(&self, other: &State) -> std::cmp::Ordering {
+        other.steps.cmp(&self.steps)
+    }
 }
 
 fn part1(input: &str) -> usize {
@@ -139,24 +151,26 @@ fn part1(input: &str) -> usize {
         }
     }
 
-    let mut queue: BinaryHeap<Reverse<(usize, State)>> = BinaryHeap::new();
-    queue.push(Reverse((0, State {
+    let mut queue = BinaryHeap::new();
+    queue.push(State {
         node: Node::Start,
         keys: KeySet::default(),
-    })));
+        steps: 0,
+    });
     let mut visited = HashSet::new();
-    while let Some(Reverse((steps, cur))) = queue.pop() {
-        if !visited.insert(cur) {
+    while let Some(cur) = queue.pop() {
+        if !visited.insert((cur.node, cur.keys)) {
             continue;
         }
         if cur.keys == map.all_keys {
-            return steps;
+            return cur.steps;
         }
         let dists = distances.get(&cur.node).unwrap();
-        for (&next_node, dist) in dists {
+        for (&next_node, steps) in dists {
             let mut next_state = State {
                 node: next_node,
                 keys: cur.keys,
+                steps: cur.steps + steps,
             };
             match next_node {
                 Node::Start => panic!("Start node should only have out edges"),
@@ -169,7 +183,7 @@ fn part1(input: &str) -> usize {
                     }
                 },
             }
-            queue.push(Reverse((steps + dist, next_state)));
+            queue.push(next_state);
         }
     }
     panic!("No route found that collects all keys")
@@ -227,5 +241,5 @@ fn main() {
 
 #[test]
 fn test_answers() {
-    // aoc::test(part1, "TODO".to_string(), part2, "TODO".to_string());
+    // aoc::test(part1, 4270, part2, "TODO".to_string());
 }

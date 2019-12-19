@@ -17,8 +17,10 @@ pub struct Memory {
 
 impl Memory {
     pub fn parse(input: &str) -> Self {
+        let mut low: Vec<Number> = input.trim().split(",").map(|s| s.parse::<Number>().unwrap()).collect();
+        low.resize(low.len() * 2, 0);
         Memory {
-            low: input.trim().split(",").map(|s| s.parse::<Number>().unwrap()).collect(),
+            low,
             high: HashMap::new(),
         }
     }
@@ -37,6 +39,7 @@ impl std::ops::Index<usize> for Memory {
 
 impl std::ops::IndexMut<usize> for Memory {
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        // TODO allow resizing low, up to a point
         if index < self.low.len() {
             &mut self.low[index]
         } else {

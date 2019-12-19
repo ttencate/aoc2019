@@ -51,21 +51,19 @@ impl Iterator for BeamTracer {
 
 fn part1(input: &str) -> usize {
     let program = Program::parse(input);
-    // for y in 0..80 {
-    //     for x in 0..80 {
-    //         print!("{}", if program.clone().run_with_io(vec![x, y]).output[0] == 1 { '#' } else { '.' });
-    //     }
-    //     println!();
-    // }
-    let mut count = 0;
-    for slice in BeamTracer::new(program).take(50) {
-        count += (slice.ys.end - slice.ys.start) as usize;
-    }
-    count
+    BeamTracer::new(program).take(50).map(|slice| (slice.ys.end - slice.ys.start) as usize).sum()
 }
 
-fn part2(_input: &str) -> String {
-    "TODO".to_string()
+fn part2(input: &str) -> i64 {
+    let program = Program::parse(input);
+    let mut y_ends = Vec::new();
+    for slice in BeamTracer::new(program) {
+        y_ends.push(slice.ys.end);
+        if slice.x >= 100 && y_ends[slice.x as usize - 99] >= slice.ys.start + 100 {
+            return (slice.x - 99) * 10000 + slice.ys.start;
+        }
+    }
+    panic!("Beam tracer ended unexpectedly")
 }
 
 fn main() {
@@ -74,5 +72,5 @@ fn main() {
 
 #[test]
 fn test_answers() {
-    // aoc::test(part1, 131, part2, "TODO".to_string());
+    aoc::test(part1, 131, part2, 15231022);
 }

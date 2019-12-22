@@ -16,6 +16,7 @@ WALK
     }
 }
 
+#[cfg(test)]
 const SPRINGCODE_PREFER_WALK: &str = "OR F T
 OR I T
 AND E T
@@ -31,11 +32,26 @@ AND A J
 NOT J J
 RUN
 ";
+
+#[cfg(test)]
 const SPRINGCODE_PREFER_JUMP: &str = "OR F J
 OR I J
 AND E J
 OR H J
 AND D J
+RUN
+";
+
+const SPRINGCODE_AD_HOC: &str = "OR B T
+AND C T
+NOT T J
+AND E T
+AND I T
+OR H T
+AND T J
+AND D J
+NOT A T
+OR T J
 RUN
 ";
 
@@ -138,12 +154,13 @@ fn verify_springcode(springcode: &str) -> bool {
 fn test_springcode() {
     assert!(verify_springcode(SPRINGCODE_PREFER_WALK));
     assert!(verify_springcode(SPRINGCODE_PREFER_JUMP));
+    assert!(verify_springcode(SPRINGCODE_AD_HOC));
 }
 
 fn part2(input: &str) -> Number {
     let program = Program::parse(input);
     let output = program
-        .run_with_io(SPRINGCODE_PREFER_JUMP.as_bytes().iter().map(|&c| c as Number).collect::<Vec<_>>())
+        .run_with_io(SPRINGCODE_AD_HOC.as_bytes().iter().map(|&c| c as Number).collect::<Vec<_>>())
         .output;
     if *output.last().unwrap() >= 128 {
         return *output.last().unwrap()
@@ -158,5 +175,5 @@ fn main() {
 
 #[test]
 fn test_answers() {
-    // aoc::test(part1, 19361850, part2, "TODO".to_string());
+    aoc::test(part1, 19361850, part2, 1138943788);
 }

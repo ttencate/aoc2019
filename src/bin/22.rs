@@ -1,26 +1,43 @@
 use aoc::math::*;
 
-#[derive(Debug, Copy, Clone)]
-enum Operation {
-    DealIntoNewStack(usize),
-    Cut(usize, usize),
-    DealWithIncrement(usize, usize),
+#[derive(Debug)]
+struct Operation {
+    mul: i128,
+    add: i128,
+    num_cards: i128,
 }
 
-use Operation::*;
-
 impl Operation {
+    fn identity(num_cards: usize) -> Self {
+        Operation {
+            mul: 1,
+            add: 0,
+            num_cards: num_cards as i128,
+        }
+    }
+
     fn deal_into_new_stack(num_cards: usize) -> Self {
-        DealIntoNewStack(num_cards)
+        Operation {
+            mul: num_cards as i128 - 1,
+            add: num_cards as i128 - 1,
+            num_cards: num_cards as i128,
+        }
     }
 
     fn cut(num_cut: i64, num_cards: usize) -> Self {
-        let abs_num_cut = if num_cut >= 0 { num_cut } else { num_cards as i64 + num_cut } as usize;
-        Cut(abs_num_cut, num_cards)
+        Operation {
+            mul: 1,
+            add: if num_cut >= 0 { num_cards as i64 - num_cut } else { -num_cut } as i128,
+            num_cards: num_cards as i128,
+        }
     }
 
     fn deal_with_increment(increment: usize, num_cards: usize) -> Self {
-        DealWithIncrement(increment, num_cards)
+        Operation {
+            mul: increment as i128,
+            add: 0,
+            num_cards: num_cards as i128,
+        }
     }
 
     fn from_str(s: &str, num_cards: usize) -> Self {
@@ -35,133 +52,93 @@ impl Operation {
         }
     }
 
-    fn forward(self, pos: usize) -> usize {
-        match self {
-            DealIntoNewStack(num_cards) => {
-                num_cards - pos - 1
-            },
-            Cut(num_cut, num_cards) => {
-                (pos + num_cards - num_cut) % num_cards
-            },
-            DealWithIncrement(increment, num_cards) => {
-                (pos * increment) % num_cards
-            },
+    fn apply(&self, pos: usize) -> usize {
+        (((pos as i128 * self.mul) + self.add) % self.num_cards) as usize
+    }
+
+    fn inverse(&self) -> Operation {
+        let inv = inverse_mod_n(self.mul, self.num_cards);
+        Operation {
+            mul: inv,
+            add: (-inv * self.add).rem_euclid(self.num_cards),
+            num_cards: self.num_cards,
         }
     }
 
-    #[cfg(test)]
-    fn reverse(self, pos: usize) -> usize {
-        self.reverse_as_mul_add().apply(pos, self.num_cards())
-    }
-
-    #[cfg(test)]
-    fn num_cards(self) -> usize {
-        match self {
-            DealIntoNewStack(num_cards) => num_cards,
-            Cut(_, num_cards) => num_cards,
-            DealWithIncrement(_, num_cards) => num_cards,
-        }
-    }
-
-    fn reverse_as_mul_add(self) -> MulAdd {
-        match self {
-            DealIntoNewStack(num_cards) => MulAdd { mul: num_cards as u128 - 1, add: num_cards as u128 - 1 },
-            Cut(num_cut, _) => MulAdd { mul: 1, add: num_cut as u128 },
-            DealWithIncrement(increment, num_cards) => MulAdd { mul: inverse_mod_n(increment, num_cards) as u128, add: 0 },
+    fn then(&self, next: &Operation) -> Operation {
+        Operation {
+            mul: (next.mul * self.mul) % self.num_cards,
+            add: (next.mul * self.add + next.add) % self.num_cards,
+            num_cards: self.num_cards,
         }
     }
 }
 
 #[test]
-fn test_forward() {
+fn test_apply() {
     let n = 10;
-    assert_eq!(Operation::deal_into_new_stack(n).forward(0), 9);
-    assert_eq!(Operation::deal_into_new_stack(n).forward(9), 0);
-    assert_eq!(Operation::cut(3, n).forward(0), 7);
-    assert_eq!(Operation::cut(3, n).forward(2), 9);
-    assert_eq!(Operation::cut(3, n).forward(3), 0);
-    assert_eq!(Operation::cut(3, n).forward(9), 6);
-    assert_eq!(Operation::cut(-4, n).forward(0), 4);
-    assert_eq!(Operation::cut(-4, n).forward(5), 9);
-    assert_eq!(Operation::cut(-4, n).forward(6), 0);
-    assert_eq!(Operation::cut(-4, n).forward(9), 3);
-    assert_eq!(Operation::deal_with_increment(3, n).forward(0), 0);
-    assert_eq!(Operation::deal_with_increment(3, n).forward(1), 3);
-    assert_eq!(Operation::deal_with_increment(3, n).forward(8), 4);
-    assert_eq!(Operation::deal_with_increment(3, n).forward(9), 7);
+    assert_eq!(Operation::deal_into_new_stack(n).apply(0), 9);
+    assert_eq!(Operation::deal_into_new_stack(n).apply(9), 0);
+    assert_eq!(Operation::cut(3, n).apply(0), 7);
+    assert_eq!(Operation::cut(3, n).apply(2), 9);
+    assert_eq!(Operation::cut(3, n).apply(3), 0);
+    assert_eq!(Operation::cut(3, n).apply(9), 6);
+    assert_eq!(Operation::cut(-4, n).apply(0), 4);
+    assert_eq!(Operation::cut(-4, n).apply(5), 9);
+    assert_eq!(Operation::cut(-4, n).apply(6), 0);
+    assert_eq!(Operation::cut(-4, n).apply(9), 3);
+    assert_eq!(Operation::deal_with_increment(3, n).apply(0), 0);
+    assert_eq!(Operation::deal_with_increment(3, n).apply(1), 3);
+    assert_eq!(Operation::deal_with_increment(3, n).apply(8), 4);
+    assert_eq!(Operation::deal_with_increment(3, n).apply(9), 7);
 }
 
 #[test]
-fn test_reverse() {
+fn test_inverse() {
     let n = 10;
-    assert_eq!(Operation::deal_into_new_stack(n).reverse(0), 9);
-    assert_eq!(Operation::deal_into_new_stack(n).reverse(9), 0);
-    assert_eq!(Operation::cut(3, n).reverse(7), 0);
-    assert_eq!(Operation::cut(3, n).reverse(9), 2);
-    assert_eq!(Operation::cut(3, n).reverse(0), 3);
-    assert_eq!(Operation::cut(3, n).reverse(6), 9);
-    assert_eq!(Operation::cut(-4, n).reverse(4), 0);
-    assert_eq!(Operation::cut(-4, n).reverse(9), 5);
-    assert_eq!(Operation::cut(-4, n).reverse(0), 6);
-    assert_eq!(Operation::cut(-4, n).reverse(3), 9);
-    assert_eq!(Operation::deal_with_increment(3, n).reverse(0), 0);
-    assert_eq!(Operation::deal_with_increment(3, n).reverse(1), 7);
-    assert_eq!(Operation::deal_with_increment(3, n).reverse(2), 4);
-    assert_eq!(Operation::deal_with_increment(3, n).reverse(3), 1);
-    assert_eq!(Operation::deal_with_increment(3, n).reverse(4), 8);
-    assert_eq!(Operation::deal_with_increment(3, n).reverse(5), 5);
-    assert_eq!(Operation::deal_with_increment(3, n).reverse(6), 2);
-    assert_eq!(Operation::deal_with_increment(3, n).reverse(7), 9);
-    assert_eq!(Operation::deal_with_increment(3, n).reverse(8), 6);
-    assert_eq!(Operation::deal_with_increment(3, n).reverse(9), 3);
+    assert_eq!(Operation::deal_into_new_stack(n).inverse().apply(0), 9);
+    assert_eq!(Operation::deal_into_new_stack(n).inverse().apply(9), 0);
+    assert_eq!(Operation::cut(3, n).inverse().apply(7), 0);
+    assert_eq!(Operation::cut(3, n).inverse().apply(9), 2);
+    assert_eq!(Operation::cut(3, n).inverse().apply(0), 3);
+    assert_eq!(Operation::cut(3, n).inverse().apply(6), 9);
+    assert_eq!(Operation::cut(-4, n).inverse().apply(4), 0);
+    assert_eq!(Operation::cut(-4, n).inverse().apply(9), 5);
+    assert_eq!(Operation::cut(-4, n).inverse().apply(0), 6);
+    assert_eq!(Operation::cut(-4, n).inverse().apply(3), 9);
+    assert_eq!(Operation::deal_with_increment(3, n).inverse().apply(0), 0);
+    assert_eq!(Operation::deal_with_increment(3, n).inverse().apply(1), 7);
+    assert_eq!(Operation::deal_with_increment(3, n).inverse().apply(2), 4);
+    assert_eq!(Operation::deal_with_increment(3, n).inverse().apply(3), 1);
+    assert_eq!(Operation::deal_with_increment(3, n).inverse().apply(4), 8);
+    assert_eq!(Operation::deal_with_increment(3, n).inverse().apply(5), 5);
+    assert_eq!(Operation::deal_with_increment(3, n).inverse().apply(6), 2);
+    assert_eq!(Operation::deal_with_increment(3, n).inverse().apply(7), 9);
+    assert_eq!(Operation::deal_with_increment(3, n).inverse().apply(8), 6);
+    assert_eq!(Operation::deal_with_increment(3, n).inverse().apply(9), 3);
 }
 
 fn part1(input: &str) -> usize {
     let num_cards = 10007;
     let ops = input.lines().map(|line| Operation::from_str(line.trim(), num_cards)).collect::<Vec<_>>();
-    ops.iter().fold(2019, |pos, op| { op.forward(pos) })
-}
-
-#[derive(Debug, Copy, Clone)]
-struct MulAdd {
-    mul: u128,
-    add: u128,
-}
-
-impl Default for MulAdd {
-    fn default() -> Self {
-        MulAdd { mul: 1, add: 0 }
-    }
-}
-
-impl MulAdd {
-    fn apply(&self, pos: usize, num_cards: usize) -> usize {
-        ((pos as u128 * self.mul + self.add) % num_cards as u128) as usize
-    }
-
-    fn then(&self, other: MulAdd, num_cards: usize) -> MulAdd {
-        MulAdd {
-            mul: (self.mul * other.mul) % num_cards as u128,
-            add: (self.mul * other.add + self.add) % num_cards as u128,
-        }
-    }
+    ops.iter().fold(2019, |pos, op| { op.apply(pos) })
 }
 
 fn card_in_position(final_pos: usize, num_cards: usize, mut num_iterations: usize, ops: &Vec<Operation>) -> usize {
-    let single_iter_mul_add = ops.iter().rev().fold(MulAdd::default(), |acc, op| {
-        acc.then(op.reverse_as_mul_add(), num_cards)
+    let single_iter_op = ops.iter().fold(Operation::identity(num_cards), |acc, op| {
+        acc.then(op)
     });
 
-    let mut power_mul_add = single_iter_mul_add;
-    let mut total_mul_add = MulAdd::default();
+    let mut power_op = single_iter_op;
+    let mut total_op = Operation::identity(num_cards);
     while num_iterations > 0 {
         if num_iterations % 2 != 0 {
-            total_mul_add = total_mul_add.then(power_mul_add, num_cards);
+            total_op = total_op.then(&power_op);
         }
-        power_mul_add = power_mul_add.then(power_mul_add, num_cards);
+        power_op = power_op.then(&power_op);
         num_iterations /= 2;
     }
-    total_mul_add.apply(final_pos, num_cards)
+    total_op.inverse().apply(final_pos)
 }
 
 #[test]
@@ -249,11 +226,6 @@ fn part2(input: &str) -> usize {
     let num_iterations = 101741582076661;
     let final_pos = 2020;
     let ops = input.lines().map(|line| Operation::from_str(line.trim(), num_cards)).collect::<Vec<_>>();
-
-    let reverse_pos = card_in_position(final_pos, num_cards, 1, &ops);
-    let forward_reverse_pos = ops.iter().fold(reverse_pos, |pos, op| op.forward(pos));
-    assert_eq!(forward_reverse_pos, final_pos);
-
     card_in_position(final_pos, num_cards, num_iterations, &ops)
 }
 
@@ -263,5 +235,5 @@ fn main() {
 
 #[test]
 fn test_answers() {
-    // aoc::test(part1, 5540, part2, "TODO".to_string());
+    aoc::test(part1, 5540, part2, 6821410630991);
 }

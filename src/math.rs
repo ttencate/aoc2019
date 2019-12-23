@@ -16,12 +16,12 @@ pub fn lcm<T>(a: T, b: T) -> T
     a * b / gcd(a, b)
 }
 
-pub fn inverse_mod_n(a: i128, n: i128) -> i128 {
+pub fn inverse_mod_n(a: usize, n: usize) -> usize {
     // https://en.wikipedia.org/wiki/Extended_Euclidean_algorithm#Modular_integers
-    let mut t = 0;
-    let mut r = n;
-    let mut new_t = 1;
-    let mut new_r = a;
+    let mut t: i128 = 0;
+    let mut r: i128 = n as i128;
+    let mut new_t: i128 = 1;
+    let mut new_r: i128 = a as i128;
     while new_r != 0 {
         let q = r / new_r;
         let old_t = t;
@@ -35,9 +35,9 @@ pub fn inverse_mod_n(a: i128, n: i128) -> i128 {
         panic!("{:?} is not invertible modulo {:?}", a, n);
     }
     if t < 0 {
-        t += n;
+        t += n as i128;
     }
-    t
+    t as usize
 }
 
 #[test]
@@ -52,6 +52,7 @@ fn test_inverse_mod_n() {
     assert_eq!(inverse_mod_n(3, 5), 2);
     assert_eq!(inverse_mod_n(4, 5), 4);
 
+    assert_eq!(inverse_mod_n(1, 10), 1);
     assert_eq!(inverse_mod_n(3, 10), 7);
     assert_eq!(inverse_mod_n(7, 10), 3);
     assert_eq!(inverse_mod_n(9, 10), 9);

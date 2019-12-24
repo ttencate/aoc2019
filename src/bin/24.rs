@@ -125,28 +125,27 @@ fn num_bugs_after(initial_state: State, num_iterations: usize) -> usize {
     let initial_level = max_level / 2;
     let mut state: Vec<State> = vec![0; max_level];
     state[initial_level] = initial_state;
-    for _ in 0..num_iterations {
+    for iter in 0..num_iterations {
         state = (0..max_level)
             .map(|level| {
-                if level == 0 || level == max_level - 1 {
+                let expanse = iter / 2 + 1;
+                if level < initial_level - expanse || level > initial_level + expanse {
                     return 0;
                 }
+                let current_level = state[level];
+                let inner_level = state[level + 1];
+                let outer_level = state[level - 1];
+                let outer_cells =
+                    (((outer_level >>  7) & 1) << 0) |
+                    (((outer_level >> 11) & 1) << 1) |
+                    (((outer_level >> 13) & 1) << 2) |
+                    (((outer_level >> 17) & 1) << 3);
+                let env =
+                    current_level |
+                    inner_level << 25 |
+                    outer_cells << 50;
                 (0..25)
-                    .map(|i| {
-                        let current_level = state[level];
-                        let inner_level = state[level + 1];
-                        let outer_level = state[level - 1];
-                        let outer_cells =
-                            (((outer_level >>  7) & 1) << 0) |
-                            (((outer_level >> 11) & 1) << 1) |
-                            (((outer_level >> 13) & 1) << 2) |
-                            (((outer_level >> 17) & 1) << 3);
-                        let env =
-                            current_level |
-                            inner_level << 25 |
-                            outer_cells << 50;
-                        next_bit(env, 1 << i, (env & RECURSIVE_NEIGH_MASK[i]).count_ones())
-                    })
+                    .map(|i| next_bit(env, 1 << i, (env & RECURSIVE_NEIGH_MASK[i]).count_ones()))
                     .fold(0, |a, b| a | b)
             })
             .collect();

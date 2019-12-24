@@ -140,9 +140,31 @@ fn num_bugs_after(initial_state: State, num_iterations: usize) -> usize {
                     current_level |
                     inner_level << 25 |
                     outer_part << 50;
-                (0..25)
-                    .map(|i| next_bit(env, 1 << i, (env & RECURSIVE_NEIGH_MASK[i]).count_ones()))
-                    .fold(0, |a, b| a | b)
+                next_bit(env, 1 <<  0, (env & RECURSIVE_NEIGH_MASK[0]).count_ones()) |
+                next_bit(env, 1 <<  1, (env & RECURSIVE_NEIGH_MASK[1]).count_ones()) |
+                next_bit(env, 1 <<  2, (env & RECURSIVE_NEIGH_MASK[2]).count_ones()) |
+                next_bit(env, 1 <<  3, (env & RECURSIVE_NEIGH_MASK[3]).count_ones()) |
+                next_bit(env, 1 <<  4, (env & RECURSIVE_NEIGH_MASK[4]).count_ones()) |
+                next_bit(env, 1 <<  5, (env & RECURSIVE_NEIGH_MASK[5]).count_ones()) |
+                next_bit(env, 1 <<  6, (env & RECURSIVE_NEIGH_MASK[6]).count_ones()) |
+                next_bit(env, 1 <<  7, (env & RECURSIVE_NEIGH_MASK[7]).count_ones()) |
+                next_bit(env, 1 <<  8, (env & RECURSIVE_NEIGH_MASK[8]).count_ones()) |
+                next_bit(env, 1 <<  9, (env & RECURSIVE_NEIGH_MASK[9]).count_ones()) |
+                next_bit(env, 1 << 10, (env & RECURSIVE_NEIGH_MASK[10]).count_ones()) |
+                next_bit(env, 1 << 11, (env & RECURSIVE_NEIGH_MASK[11]).count_ones()) |
+                // next_bit(env, 1 << 12, (env & RECURSIVE_NEIGH_MASK[12]).count_ones()) |
+                next_bit(env, 1 << 13, (env & RECURSIVE_NEIGH_MASK[13]).count_ones()) |
+                next_bit(env, 1 << 14, (env & RECURSIVE_NEIGH_MASK[14]).count_ones()) |
+                next_bit(env, 1 << 15, (env & RECURSIVE_NEIGH_MASK[15]).count_ones()) |
+                next_bit(env, 1 << 16, (env & RECURSIVE_NEIGH_MASK[16]).count_ones()) |
+                next_bit(env, 1 << 17, (env & RECURSIVE_NEIGH_MASK[17]).count_ones()) |
+                next_bit(env, 1 << 18, (env & RECURSIVE_NEIGH_MASK[18]).count_ones()) |
+                next_bit(env, 1 << 19, (env & RECURSIVE_NEIGH_MASK[19]).count_ones()) |
+                next_bit(env, 1 << 20, (env & RECURSIVE_NEIGH_MASK[20]).count_ones()) |
+                next_bit(env, 1 << 21, (env & RECURSIVE_NEIGH_MASK[21]).count_ones()) |
+                next_bit(env, 1 << 22, (env & RECURSIVE_NEIGH_MASK[22]).count_ones()) |
+                next_bit(env, 1 << 23, (env & RECURSIVE_NEIGH_MASK[23]).count_ones()) |
+                next_bit(env, 1 << 24, (env & RECURSIVE_NEIGH_MASK[24]).count_ones())
             })
             .collect();
     }

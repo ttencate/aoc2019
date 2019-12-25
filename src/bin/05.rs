@@ -1,15 +1,11 @@
 use aoc::intcode::*;
 
 fn part1(input: &str) -> Number {
-    *Program::parse(input)
-        .run_with_io(vec![1])
-        .output.last().unwrap()
+    *Program::parse(input).run_with_io(vec![1]).last().unwrap()
 }
 
 fn part2(input: &str) -> Number {
-    *Program::parse(input)
-        .run_with_io(vec![5])
-        .output.last().unwrap()
+    *Program::parse(input).run_with_io(vec![5]).last().unwrap()
 }
 
 fn main() {

@@ -1,14 +1,14 @@
 use aoc::intcode::*;
 
 fn part1(input: &str) -> Number {
-    let program = Program::parse(input);
+    let mut program = Program::parse(input);
     let springcode = "NOT A J
 NOT C T
 AND D T
 OR T J
 WALK
 ".as_bytes().iter().map(|&c| c as Number).collect::<Vec<_>>();
-    let output = program.run_with_io(springcode).output;
+    let output = program.run_with_io(springcode);
     if *output.last().unwrap() >= 128 {
         return *output.last().unwrap()
     } else {
@@ -158,10 +158,9 @@ fn test_springcode() {
 }
 
 fn part2(input: &str) -> Number {
-    let program = Program::parse(input);
+    let mut program = Program::parse(input);
     let output = program
-        .run_with_io(SPRINGCODE_AD_HOC.as_bytes().iter().map(|&c| c as Number).collect::<Vec<_>>())
-        .output;
+        .run_with_io(SPRINGCODE_AD_HOC.as_bytes().iter().map(|&c| c as Number).collect::<Vec<_>>());
     if *output.last().unwrap() >= 128 {
         return *output.last().unwrap()
     } else {

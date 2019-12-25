@@ -163,7 +163,7 @@ fn test_alignment_parameters_sum() {
 }
 
 fn part1(input: &str) -> i64 {
-    let output = Program::parse(input).run_with_io(vec![]).output;
+    let output = Program::parse(input).run_with_io(vec![]);
     let ascii = String::from_utf8(output.iter().map(|&val| val as u8).collect()).unwrap();
     let state = State::parse(&ascii);
     alignment_parameters_sum(&state)
@@ -323,7 +323,7 @@ fn test_path_to_functions() {
 
 fn part2(input: &str) -> Number {
     let mut program = Program::parse(input);
-    let output = program.clone().run_with_io(vec![]).output;
+    let output = program.clone().run_with_io(vec![]);
     let ascii = String::from_utf8(output.iter().map(|&val| val as u8).collect()).unwrap();
     let state = State::parse(&ascii);
     let path = trace_path(&state);
@@ -331,7 +331,7 @@ fn part2(input: &str) -> Number {
     let functions = path_to_functions(&path);
     program.mem[0] = 2;
     let input = (functions + "n\n").as_bytes().iter().map(|&c| c as Number).collect();
-    let output = program.run_with_io(input).output;
+    let output = program.run_with_io(input);
     *output.last().unwrap()
 }
 

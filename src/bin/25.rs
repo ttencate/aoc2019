@@ -9,19 +9,19 @@ fn part1(input: &str) -> String {
     let mut stdout = stdout.lock();
     loop {
         match program.run() {
-            mut interrupt @ Interrupt::Reading(_) => {
+            Interrupt::Reading => {
                 let mut line = String::new();
                 stdin.read_line(&mut line).unwrap();
-                for &c in line.trim().as_bytes() {
-                    interrupt = interrupt.give_input(c as Number).run();
+                for &c in line.as_bytes() {
+                    program.give_input(c as Number);
+                    program.run();
                 }
-                program = interrupt.give_input('\n' as Number);
             },
-            Interrupt::Writing(val, next) => {
-                write!(stdout, "{}", val as u8 as char).unwrap();
-                program = next();
+            Interrupt::Writing => {
+                let output = program.take_output();
+                write!(stdout, "{}", output as u8 as char).unwrap();
             },
-            Interrupt::Halted(_) => {
+            Interrupt::Halted => {
                 return "TODO".to_string();
             },
         }

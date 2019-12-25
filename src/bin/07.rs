@@ -8,7 +8,7 @@ fn part1(input: &str) -> Number {
         .map(|p| {
             let mut output = 0;
             for i in 0..5 {
-                output = program.clone().run_with_io(vec![p[i], output]).output[0];
+                output = program.clone().run_with_io(vec![p[i], output])[0];
             }
             output
         })
@@ -29,27 +29,26 @@ fn part2(input: &str) -> Number {
         .permute()
         .map(|p| {
             let mut programs = p.iter().map(|&i| {
-                Some(program.clone().run().give_input(i))
+                let mut p = program.clone();
+                p.run();
+                p.give_input(i);
+                p
             }).collect::<Vec<_>>();
 
             let mut output = 0;
             let mut i = 0;
             loop {
-                let program = programs[i].take().unwrap();
-                let program = match program.run() {
-                    Interrupt::Reading(next) => next(output),
-                    Interrupt::Halted(_) => break,
+                let program = &mut programs[i];
+                match program.run() {
+                    Interrupt::Reading => program.give_input(output),
+                    Interrupt::Halted => break,
                     _ => panic!("Expected machine to read input"),
-                };
-                let program = match program.run() {
-                    Interrupt::Writing(val, next) => {
-                        output = val;
-                        next()
-                    },
-                    Interrupt::Halted(_) => break,
+                }
+                match program.run() {
+                    Interrupt::Writing => output = program.take_output(),
+                    Interrupt::Halted => break,
                     _ => panic!("Expected machine to write output"),
-                };
-                programs[i].replace(program);
+                }
                 i = (i + 1) % 5;
             }
             output

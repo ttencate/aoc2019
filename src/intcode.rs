@@ -51,58 +51,18 @@ impl std::ops::IndexMut<usize> for Memory {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Program {
     pub mem: Memory,
+    interrupt: Option<Interrupt>,
     ip: Addr,
     relative_base: Number,
     cur_ip: Addr,
     cur_op: Number,
 }
 
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub enum Interrupt {
-    Reading(Box<dyn FnOnce(Number) -> Program>),
-    Writing(Number, Box<dyn FnOnce() -> Program>),
-    Halted(Program),
-}
-
-impl std::fmt::Debug for Interrupt {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        match self {
-            Interrupt::Reading(_) => write!(f, "Reading(_)"),
-            Interrupt::Writing(output, _) => write!(f, "Writing({}, _)", output),
-            Interrupt::Halted(program) => write!(f, "Halted({:?})", program),
-        }
-    }
-}
-
-impl Interrupt {
-    pub fn give_input(self, input: Number) -> Program {
-        match self {
-            Interrupt::Reading(next) => next(input),
-            _ => panic!("Attempted to read input in interrupt state {:?}", self),
-        }
-    }
-
-    pub fn take_output(self) -> (Number, Program) {
-        match self {
-            Interrupt::Writing(output, next) => {
-                (output, next())
-            },
-            _ => panic!("Attempted to write output in interrupt state {:?}", self),
-        }
-    }
-
-    pub fn take_program(self) -> Program {
-        match self {
-            Interrupt::Halted(program) => program,
-            _ => panic!("Attempted to take program in interrupt state {:?}", self),
-        }
-    }
-
-    pub fn is_halted(&self) -> bool {
-        match self {
-            Interrupt::Halted(_) => true,
-            _ => false,
-        }
-    }
+    Reading,
+    Writing,
+    Halted,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -112,16 +72,11 @@ enum ArgMode {
     Relative,
 }
 
-#[derive(Debug)]
-pub struct ProgramWithOutput {
-    pub program: Program,
-    pub output: Vec<Number>,
-}
-
 impl Program {
     pub fn new(mem: Memory) -> Self {
         Program {
             mem: mem,
+            interrupt: None,
             ip: 0,
             relative_base: 0,
             cur_ip: 0,
@@ -133,8 +88,11 @@ impl Program {
         Self::new(Memory::parse(input))
     }
 
-    pub fn run(mut self) -> Interrupt {
+    pub fn run(&mut self) -> Interrupt {
         loop {
+            if let Some(interrupt) = self.interrupt {
+                return interrupt;
+            }
             self.cur_ip = self.ip;
             self.cur_op = self.mem[self.ip];
             self.ip += 1;
@@ -143,42 +101,63 @@ impl Program {
             match opcode {
                 1 => { self.bin_op(|a, b| a + b); },
                 2 => { self.bin_op(|a, b| a * b); },
-                3 => { return self.input(); },
-                4 => { return self.output(); },
+                3 => { self.input(); },
+                4 => { self.output(); },
                 5 => { self.cond_jump(|a| a != 0); },
                 6 => { self.cond_jump(|a| a == 0); },
                 7 => { self.bin_op(|a, b| if a < b { 1 } else { 0 }); },
                 8 => { self.bin_op(|a, b| if a == b { 1 } else { 0 }); },
                 9 => { self.rel_base(); },
-                99 => { return Interrupt::Halted(self); }
+                99 => { self.halt(); }
                 _ => { panic!("Invalid opcode {} at address {}", opcode, self.cur_ip); }
             }
         }
     }
 
-    pub fn run_without_io(self) -> Program {
+    pub fn give_input(&mut self, val: Number) {
+        if self.interrupt != Some(Interrupt::Reading) {
+            panic!("Attempted to read input in interrupt state {:?}", self.interrupt);
+        }
+        self.interrupt = None;
+        let dest = self.eval_addr();
+        self.mem[dest] = val;
+    }
+
+    pub fn take_output(&mut self) -> Number {
+        if self.interrupt != Some(Interrupt::Writing) {
+            panic!("Attempted to write output in interrupt state {:?}", self);
+        }
+        self.interrupt = None;
+        self.eval_arg()
+    }
+
+    pub fn is_halted(&self) -> bool {
+        self.interrupt == Some(Interrupt::Halted)
+    }
+
+    pub fn run_without_io(&mut self) {
         match self.run() {
-            Interrupt::Reading(_) => panic!("This implementation cannot read input"),
-            Interrupt::Writing(_, _) => panic!("This implementation cannot write output"),
-            Interrupt::Halted(program) => program,
+            Interrupt::Reading => panic!("This implementation cannot read input"),
+            Interrupt::Writing => panic!("This implementation cannot write output"),
+            Interrupt::Halted => {},
         }
     }
 
-    pub fn run_with_io(self, input: Vec<Number>) -> ProgramWithOutput {
+    pub fn run_with_io(&mut self, input: Vec<Number>) -> Vec<Number> {
         let mut input_iter = input.into_iter();
         let mut output = vec![];
-        let mut interrupt = self.run();
         loop {
-            interrupt = match interrupt {
-                Interrupt::Reading(next) => {
-                    next(input_iter.next().expect("Attempted to read from empty input")).run()
+            match self.run() {
+                Interrupt::Reading => {
+                    let val = input_iter.next().expect("Attempted to read from empty input");
+                    self.give_input(val);
                 },
-                Interrupt::Writing(n, next) => {
-                    output.push(n);
-                    next().run()
+                Interrupt::Writing => {
+                    let val = self.take_output();
+                    output.push(val);
                 },
-                Interrupt::Halted(program) => {
-                    return ProgramWithOutput { program, output };
+                Interrupt::Halted => {
+                    return output;
                 },
             };
         }
@@ -230,19 +209,16 @@ impl Program {
         self.mem[dest] = f(a, b);
     }
 
-    fn input(mut self) -> Interrupt {
-        let dest = self.eval_addr();
-        Interrupt::Reading(Box::new(move |val: Number| -> Program {
-            self.mem[dest] = val;
-            self
-        }))
+    fn input(&mut self) {
+        self.interrupt = Some(Interrupt::Reading);
     }
 
-    fn output(mut self) -> Interrupt {
-        let val = self.eval_arg();
-        Interrupt::Writing(val, Box::new(|| -> Program {
-            self
-        }))
+    fn output(&mut self) {
+        self.interrupt = Some(Interrupt::Writing);
+    }
+
+    fn halt(&mut self) {
+        self.interrupt = Some(Interrupt::Halted);
     }
 
     fn cond_jump<P>(&mut self, pred: P)

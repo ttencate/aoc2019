@@ -27,21 +27,21 @@ impl Iterator for BeamTracer {
         if slice.x < 12 {
             slice.ys.start = 0;
             while slice.ys.start < 12 &&
-                self.program.clone().run_with_io(vec![slice.x, slice.ys.start]).output[0] == 0
+                self.program.clone().run_with_io(vec![slice.x, slice.ys.start])[0] == 0
             {
                 slice.ys.start += 1;
             }
             slice.ys.end = slice.ys.start;
             while slice.ys.end < 12 &&
-                self.program.clone().run_with_io(vec![slice.x, slice.ys.end]).output[0] == 1
+                self.program.clone().run_with_io(vec![slice.x, slice.ys.end])[0] == 1
             {
                 slice.ys.end += 1;
             }
         } else {
-            while self.program.clone().run_with_io(vec![slice.x, slice.ys.start]).output[0] == 0 {
+            while self.program.clone().run_with_io(vec![slice.x, slice.ys.start])[0] == 0 {
                 slice.ys.start += 1;
             }
-            while self.program.clone().run_with_io(vec![slice.x, slice.ys.end]).output[0] == 1 {
+            while self.program.clone().run_with_io(vec![slice.x, slice.ys.end])[0] == 1 {
                 slice.ys.end += 1;
             }
         }

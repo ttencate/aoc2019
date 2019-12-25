@@ -22,8 +22,10 @@ const MOVED: Number = 1;
 const FOUND_OXYGEN_SYSTEM: Number = 2;
 
 fn part1(input: &str) -> usize {
+    let mut program = Program::parse(input);
+    program.run();
     let start_node = ExploreNode {
-        program: Program::parse(input),
+        program: program,
         pos: Point::default(),
         dist: 0,
     };
@@ -40,11 +42,12 @@ fn part1(input: &str) -> usize {
             (3, Vector::new(-1, 0)),
             (4, Vector::new(1, 0)),
         ] {
-            let (output, program) = node.program.clone()
-                .run()
-                .give_input(*input)
-                .run()
-                .take_output();
+            let mut program = node.program.clone();
+            program.run();
+            program.give_input(*input);
+            program.run();
+            let output = program.take_output();
+            program.run();
             match output {
                 HIT_WALL => {},
                 MOVED => {
@@ -84,11 +87,12 @@ fn part2(input: &str) -> usize {
             (3, Vector::new(-1, 0)),
             (4, Vector::new(1, 0)),
         ] {
-            let (output, program) = node.program.clone()
-                .run()
-                .give_input(*input)
-                .run()
-                .take_output();
+            let mut program = node.program.clone();
+            program.run();
+            program.give_input(*input);
+            program.run();
+            let output = program.take_output();
+            program.run();
             match output {
                 HIT_WALL => {},
                 MOVED | FOUND_OXYGEN_SYSTEM => {
@@ -139,5 +143,5 @@ fn main() {
 
 #[test]
 fn test_answers() {
-    // aoc::test(part1, 298, part2, "TODO".to_string());
+    aoc::test(part1, 298, part2, 346);
 }

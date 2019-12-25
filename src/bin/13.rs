@@ -46,13 +46,16 @@ fn screen_to_string(screen: &Screen) -> String {
 }
 
 fn part1(input: &str) -> usize {
-    let mut interrupt = Program::parse(input).run();
+    let mut program = Program::parse(input);
+    program.run();
     let mut screen = Screen::new();
-    while !interrupt.is_halted() {
-        let (x, program) = interrupt.take_output();
-        let (y, program) = program.run().take_output();
-        let (val, program) = program.run().take_output();
-        interrupt = program.run();
+    while !program.is_halted() {
+        let x = program.take_output();
+        program.run();
+        let y = program.take_output();
+        program.run();
+        let val = program.take_output();
+        program.run();
         screen.insert(Point::new(x, y), Tile::from_i64(val).expect("Invalid tile value"));
     }
     // println!("{}", screen_to_string(&screen));
@@ -63,24 +66,25 @@ fn part1(input: &str) -> usize {
 fn part2(input: &str) -> Number {
     let mut program = Program::parse(input);
     program.mem[0] = 2;
+    program.run();
     let mut screen = Screen::new();
-    let mut interrupt = program.run();
     let mut paddle_pos = Point::default();
     let mut ball_pos = Point::default();
     let mut score = 0;
     let mut first_render = true;
     loop {
         let mut render = false;
-        match interrupt {
-            Interrupt::Reading(next) => {
+        match program.run() {
+            Interrupt::Reading => {
                 render = true;
-                interrupt = next((ball_pos.x - paddle_pos.x).signum()).run();
+                program.give_input((ball_pos.x - paddle_pos.x).signum());
             },
-            Interrupt::Writing(_, _) => {
-                let (x, program) = interrupt.take_output();
-                let (y, program) = program.run().take_output();
-                let (val, program) = program.run().take_output();
-                interrupt = program.run();
+            Interrupt::Writing => {
+                let x = program.take_output();
+                program.run();
+                let y = program.take_output();
+                program.run();
+                let val = program.take_output();
                 if (x, y) == (-1, 0) {
                     score = val;
                 } else {
@@ -94,7 +98,7 @@ fn part2(input: &str) -> Number {
                     }
                 }
             },
-            Interrupt::Halted(_) => {
+            Interrupt::Halted => {
                 render = true;
                 break;
             }
@@ -119,5 +123,5 @@ fn main() {
 
 #[test]
 fn test_answers() {
-    // aoc::test(part1, 290, part2, "TODO".to_string());
+    aoc::test(part1, 260, part2, 12952);
 }

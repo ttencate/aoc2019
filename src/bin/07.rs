@@ -30,7 +30,6 @@ fn part2(input: &str) -> Number {
         .map(|p| {
             let mut programs = p.iter().map(|&i| {
                 let mut p = program.clone();
-                p.run();
                 p.give_input(i);
                 p
             }).collect::<Vec<_>>();
@@ -39,16 +38,14 @@ fn part2(input: &str) -> Number {
             let mut i = 0;
             loop {
                 let program = &mut programs[i];
-                match program.run() {
-                    Interrupt::Reading => program.give_input(output),
-                    Interrupt::Halted => break,
-                    _ => panic!("Expected machine to read input"),
+                if program.is_halted() {
+                    break;
                 }
-                match program.run() {
-                    Interrupt::Writing => output = program.take_output(),
-                    Interrupt::Halted => break,
-                    _ => panic!("Expected machine to write output"),
+                program.give_input(output);
+                if program.is_halted() {
+                    break;
                 }
+                output = program.take_output();
                 i = (i + 1) % 5;
             }
             output

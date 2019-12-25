@@ -47,15 +47,11 @@ fn screen_to_string(screen: &Screen) -> String {
 
 fn part1(input: &str) -> usize {
     let mut program = Program::parse(input);
-    program.run();
     let mut screen = Screen::new();
     while !program.is_halted() {
         let x = program.take_output();
-        program.run();
         let y = program.take_output();
-        program.run();
         let val = program.take_output();
-        program.run();
         screen.insert(Point::new(x, y), Tile::from_i64(val).expect("Invalid tile value"));
     }
     // println!("{}", screen_to_string(&screen));
@@ -66,7 +62,6 @@ fn part1(input: &str) -> usize {
 fn part2(input: &str) -> Number {
     let mut program = Program::parse(input);
     program.mem[0] = 2;
-    program.run();
     let mut screen = Screen::new();
     let mut paddle_pos = Point::default();
     let mut ball_pos = Point::default();
@@ -74,16 +69,14 @@ fn part2(input: &str) -> Number {
     let mut first_render = true;
     loop {
         let mut render = false;
-        match program.run() {
+        match program.run_until_interrupt() {
             Interrupt::Reading => {
                 render = true;
                 program.give_input((ball_pos.x - paddle_pos.x).signum());
             },
             Interrupt::Writing => {
                 let x = program.take_output();
-                program.run();
                 let y = program.take_output();
-                program.run();
                 let val = program.take_output();
                 if (x, y) == (-1, 0) {
                     score = val;

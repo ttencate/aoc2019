@@ -159,12 +159,11 @@ fn test_springcode() {
 
 fn part2(input: &str) -> Number {
     let mut program = Program::parse(input);
-    let output = program
-        .run_with_io(SPRINGCODE_AD_HOC.as_bytes().iter().map(|&c| c as Number).collect::<Vec<_>>());
+    let output = program.run_with_io(SPRINGCODE_AD_HOC.as_bytes().iter().map(|&c| c as Number).collect::<Vec<_>>());
     if *output.last().unwrap() >= 128 {
         return *output.last().unwrap()
     } else {
-        panic!("Fell into a hole:\n{}", output.iter().map(|&val| val as u8 as char).collect::<String>());
+        panic!("{}", output.iter().map(|&val| val as u8 as char).collect::<String>());
     }
 }
 

@@ -4,7 +4,7 @@ fn part1(input: &str) -> i64 {
     let mut program = Program::parse(input);
     program.mem[1] = 12;
     program.mem[2] = 2;
-    program.run_without_io();
+    program = program.run_without_io();
     program.mem[0]
 }
 
@@ -17,7 +17,7 @@ fn part2(input: &str) -> i64 {
                 let mut p = program.clone();
                 p.mem[1] = noun;
                 p.mem[2] = verb;
-                p.run_without_io();
+                p = p.run_without_io();
                 if p.mem[0] == 19690720 {
                     return 100 * noun + verb;
                 }

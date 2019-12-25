@@ -8,13 +8,12 @@ fn part1(input: &str) -> String {
     let stdout = std::io::stdout();
     let mut stdout = stdout.lock();
     loop {
-        match program.run() {
+        match program.run_until_interrupt() {
             Interrupt::Reading => {
                 let mut line = String::new();
                 stdin.read_line(&mut line).unwrap();
                 for &c in line.as_bytes() {
                     program.give_input(c as Number);
-                    program.run();
                 }
             },
             Interrupt::Writing => {

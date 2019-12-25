@@ -88,7 +88,7 @@ impl Program {
         Self::new(Memory::parse(input))
     }
 
-    pub fn run(&mut self) -> Interrupt {
+    pub fn run_until_interrupt(&mut self) -> Interrupt {
         loop {
             if let Some(interrupt) = self.interrupt {
                 return interrupt;
@@ -115,7 +115,7 @@ impl Program {
     }
 
     pub fn give_input(&mut self, val: Number) {
-        if self.interrupt != Some(Interrupt::Reading) {
+        if self.run_until_interrupt() != Interrupt::Reading {
             panic!("Attempted to read input in interrupt state {:?}", self.interrupt);
         }
         self.interrupt = None;
@@ -124,22 +124,22 @@ impl Program {
     }
 
     pub fn take_output(&mut self) -> Number {
-        if self.interrupt != Some(Interrupt::Writing) {
+        if self.run_until_interrupt() != Interrupt::Writing {
             panic!("Attempted to write output in interrupt state {:?}", self);
         }
         self.interrupt = None;
         self.eval_arg()
     }
 
-    pub fn is_halted(&self) -> bool {
-        self.interrupt == Some(Interrupt::Halted)
+    pub fn is_halted(&mut self) -> bool {
+        self.run_until_interrupt() == Interrupt::Halted
     }
 
-    pub fn run_without_io(&mut self) {
-        match self.run() {
+    pub fn run_without_io(mut self) -> Program {
+        match self.run_until_interrupt() {
             Interrupt::Reading => panic!("This implementation cannot read input"),
             Interrupt::Writing => panic!("This implementation cannot write output"),
-            Interrupt::Halted => {},
+            Interrupt::Halted => self,
         }
     }
 
@@ -147,7 +147,7 @@ impl Program {
         let mut input_iter = input.into_iter();
         let mut output = vec![];
         loop {
-            match self.run() {
+            match self.run_until_interrupt() {
                 Interrupt::Reading => {
                     let val = input_iter.next().expect("Attempted to read from empty input");
                     self.give_input(val);
@@ -270,8 +270,7 @@ fn test_add_mul() {
 fn test_input_output() {
     assert_eq!(
         Program::parse("3,0,4,0,99")
-            .run_with_io(vec![42])
-            .output,
+            .run_with_io(vec![42]),
         vec![42]);
 }
 
@@ -297,46 +296,38 @@ fn test_negative() {
 fn test_comparisons() {
     assert_eq!(
         Program::parse("3,9,8,9,10,9,4,9,99,-1,8")
-            .run_with_io(vec![8])
-            .output,
+            .run_with_io(vec![8]),
         vec![1]);
     assert_eq!(
         Program::parse("3,9,8,9,10,9,4,9,99,-1,8")
-            .run_with_io(vec![7])
-            .output,
+            .run_with_io(vec![7]),
         vec![0]);
 
     assert_eq!(
         Program::parse("3,9,7,9,10,9,4,9,99,-1,8")
-            .run_with_io(vec![7])
-            .output,
+            .run_with_io(vec![7]),
         vec![1]);
     assert_eq!(
         Program::parse("3,9,7,9,10,9,4,9,99,-1,8")
-            .run_with_io(vec![8])
-            .output,
+            .run_with_io(vec![8]),
         vec![0]);
 
     assert_eq!(
         Program::parse("3,3,1108,-1,8,3,4,3,99")
-            .run_with_io(vec![8])
-            .output,
+            .run_with_io(vec![8]),
         vec![1]);
     assert_eq!(
         Program::parse("3,3,1108,-1,8,3,4,3,99")
-            .run_with_io(vec![7])
-            .output,
+            .run_with_io(vec![7]),
         vec![0]);
 
     assert_eq!(
         Program::parse("3,3,1107,-1,8,3,4,3,99")
-            .run_with_io(vec![7])
-            .output,
+            .run_with_io(vec![7]),
         vec![1]);
     assert_eq!(
         Program::parse("3,3,1107,-1,8,3,4,3,99")
-            .run_with_io(vec![8])
-            .output,
+            .run_with_io(vec![8]),
         vec![0]);
 }
 
@@ -344,40 +335,33 @@ fn test_comparisons() {
 fn test_jumps() {
     assert_eq!(
         Program::parse("3,12,6,12,15,1,13,14,13,4,13,99,-1,0,1,9")
-            .run_with_io(vec![0])
-            .output,
+            .run_with_io(vec![0]),
         vec![0]);
     assert_eq!(
         Program::parse("3,12,6,12,15,1,13,14,13,4,13,99,-1,0,1,9")
-            .run_with_io(vec![8])
-            .output,
+            .run_with_io(vec![8]),
         vec![1]);
 
     assert_eq!(
         Program::parse("3,3,1105,-1,9,1101,0,0,12,4,12,99,1")
-            .run_with_io(vec![0])
-            .output,
+            .run_with_io(vec![0]),
         vec![0]);
     assert_eq!(
         Program::parse("3,3,1105,-1,9,1101,0,0,12,4,12,99,1")
-            .run_with_io(vec![8])
-            .output,
+            .run_with_io(vec![8]),
         vec![1]);
 
     assert_eq!(
         Program::parse("3,21,1008,21,8,20,1005,20,22,107,8,21,20,1006,20,31,1106,0,36,98,0,0,1002,21,125,20,4,20,1105,1,46,104,999,1105,1,46,1101,1000,1,20,4,20,1105,1,46,98,99")
-            .run_with_io(vec![7])
-            .output,
+            .run_with_io(vec![7]),
         vec![999]);
     assert_eq!(
         Program::parse("3,21,1008,21,8,20,1005,20,22,107,8,21,20,1006,20,31,1106,0,36,98,0,0,1002,21,125,20,4,20,1105,1,46,104,999,1105,1,46,1101,1000,1,20,4,20,1105,1,46,98,99")
-            .run_with_io(vec![8])
-            .output,
+            .run_with_io(vec![8]),
         vec![1000]);
     assert_eq!(
         Program::parse("3,21,1008,21,8,20,1005,20,22,107,8,21,20,1006,20,31,1106,0,36,98,0,0,1002,21,125,20,4,20,1105,1,46,104,999,1105,1,46,1101,1000,1,20,4,20,1105,1,46,98,99")
-            .run_with_io(vec![9])
-            .output,
+            .run_with_io(vec![9]),
         vec![1001]);
 }
 
@@ -385,18 +369,16 @@ fn test_jumps() {
 fn test_relative_mode() {
     assert_eq!(
         Program::parse("109,1,204,-1,1001,100,1,100,1008,100,16,101,1006,101,0,99")
-            .run_with_io(vec![])
-            .output,
+            .run_with_io(vec![]),
         vec![109, 1, 204, -1, 1001, 100, 1, 100, 1008, 100, 16, 101, 1006, 101, 0, 99]);
     assert_eq!(
         Program::parse("1102,34915192,34915192,7,4,7,99,0")
-            .run_with_io(vec![])
-            .output[0].to_string()
+            .run_with_io(vec![])[0]
+            .to_string()
             .len(),
         16);
     assert_eq!(
         Program::parse("104,1125899906842624,99")
-            .run_with_io(vec![])
-            .output,
+            .run_with_io(vec![]),
         vec![1125899906842624]);
 }

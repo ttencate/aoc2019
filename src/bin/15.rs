@@ -23,7 +23,7 @@ const FOUND_OXYGEN_SYSTEM: Number = 2;
 
 fn part1(input: &str) -> usize {
     let mut program = Program::parse(input);
-    program.run();
+    program.run_until_interrupt();
     let start_node = ExploreNode {
         program: program,
         pos: Point::default(),
@@ -43,11 +43,9 @@ fn part1(input: &str) -> usize {
             (4, Vector::new(1, 0)),
         ] {
             let mut program = node.program.clone();
-            program.run();
             program.give_input(*input);
-            program.run();
             let output = program.take_output();
-            program.run();
+            program.run_until_interrupt();
             match output {
                 HIT_WALL => {},
                 MOVED => {
@@ -68,8 +66,10 @@ fn part1(input: &str) -> usize {
 }
 
 fn part2(input: &str) -> usize {
+    let mut program = Program::parse(input);
+    program.run_until_interrupt();
     let start_node = ExploreNode {
-        program: Program::parse(input),
+        program: program,
         pos: Point::default(),
         dist: 0,
     };
@@ -88,11 +88,9 @@ fn part2(input: &str) -> usize {
             (4, Vector::new(1, 0)),
         ] {
             let mut program = node.program.clone();
-            program.run();
             program.give_input(*input);
-            program.run();
             let output = program.take_output();
-            program.run();
+            program.run_until_interrupt();
             match output {
                 HIT_WALL => {},
                 MOVED | FOUND_OXYGEN_SYSTEM => {

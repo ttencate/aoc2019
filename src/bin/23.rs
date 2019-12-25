@@ -15,12 +15,11 @@ fn tick_programs(programs: &mut Vec<Program>, input_queues: &mut Vec<PacketQueue
     let mut progress = false;
     for i in 0..N {
         let program = &mut programs[i];
-        match program.run() {
+        match program.run_until_interrupt() {
             Interrupt::Reading => {
                 if let Some(packet) = input_queues[i].pop_front() {
                     progress = true;
                     program.give_input(packet.x);
-                    program.run();
                     program.give_input(packet.y);
                 } else {
                     program.give_input(-1);
@@ -29,9 +28,7 @@ fn tick_programs(programs: &mut Vec<Program>, input_queues: &mut Vec<PacketQueue
             Interrupt::Writing => {
                 progress = true;
                 let dest = program.take_output();
-                program.run();
                 let x = program.take_output();
-                program.run();
                 let y = program.take_output();
                 let packet = Packet { x, y };
                 match dest {
@@ -55,7 +52,6 @@ fn part1(input: &str) -> Number {
     let mut programs: Vec<Program> = (0..N)
         .map(|i| {
             let mut p = program.clone();
-            p.run();
             p.give_input(i as Number);
             p
         })
@@ -75,7 +71,6 @@ fn part2(input: &str) -> Number {
     let mut programs: Vec<Program> = (0..N)
         .map(|i| {
             let mut p = program.clone();
-            p.run();
             p.give_input(i as Number);
             p
         })

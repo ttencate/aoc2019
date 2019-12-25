@@ -12,17 +12,13 @@ const WHITE: Number = 1;
 
 fn paint(input: &str, hull: &mut Hull) {
     let mut program = Program::parse(input);
-    program.run();
     let mut pos = Point::new(0, 0);
     let mut dir = 0;
     while !program.is_halted() {
         program.give_input(*hull.get(&pos).unwrap_or(&BLACK));
-        program.run();
         let paint_color = program.take_output();
         hull.insert(pos, paint_color);
-        program.run();
         let rotation = program.take_output();
-        program.run();
         dir = match rotation {
             0 => (dir + 4 - 1) % 4,
             1 => (dir + 1) % 4,

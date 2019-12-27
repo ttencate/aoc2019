@@ -116,7 +116,7 @@ impl Program {
 
     pub fn give_input(&mut self, val: Number) {
         if self.run_until_interrupt() != Interrupt::Reading {
-            panic!("Attempted to read input in interrupt state {:?}", self.interrupt);
+            panic!("Attempted to give input in interrupt state {:?}", self.interrupt);
         }
         self.interrupt = None;
         let dest = self.eval_addr();
@@ -125,10 +125,24 @@ impl Program {
 
     pub fn take_output(&mut self) -> Number {
         if self.run_until_interrupt() != Interrupt::Writing {
-            panic!("Attempted to write output in interrupt state {:?}", self);
+            panic!("Attempted to take output in interrupt state {:?}", self);
         }
         self.interrupt = None;
         self.eval_arg()
+    }
+
+    pub fn give_input_ascii(&mut self, ascii: &str) {
+        for &c in ascii.as_bytes() {
+            self.give_input(c as Number);
+        }
+    }
+
+    pub fn take_output_ascii(&mut self) -> String {
+        let mut ascii = String::new();
+        while self.run_until_interrupt() == Interrupt::Writing {
+            ascii.push(self.take_output() as u8 as char);
+        }
+        ascii
     }
 
     pub fn is_halted(&mut self) -> bool {
